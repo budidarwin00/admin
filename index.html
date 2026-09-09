@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="id">
+<head><style>
+@font-face {
+  font-family: "Optimistic";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("/fonts/OptimisticAI_VF_Optimized.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Optimistic Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/OptimisticMono_W_TextRegular.woff2") format("woff2");
+}
+:where(html) {
+  font-family: "Optimistic", system-ui, sans-serif;
+}
+:where(code, pre, kbd, samp) {
+  font-family: "Optimistic Mono", ui-monospace, monospace;
+}
+</style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin - FIX SINKRON</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>body{font-family:Inter,sans-serif}</style>
+</head>
+<body class="bg-[#f6f5f4] min-h-screen">
+<div id="app"></div>
+<script>
+const SYNC_URL = 'https://script.google.com/macros/s/AKfycbw5cHnAw-eyp-8KPmIhWijZbGDofMhjrSkibD-23AEBimCeT8m9msRm63AGur7N1wWpXw/exec';
+const ADMIN_PASS = 'admin123';
+let isLogin = localStorage.getItem('admin_login')==='true';
+let allData=[]; let karyawanList=[]; let filterBulan=String(new Date().getMonth()+1); let filterTahun=String(new Date().getFullYear()); let search=''; let loading=false;
+
+function showToast(m){ const t=document.createElement('div'); t.className='fixed bottom-4 left-1/2 -translate-x-1/2 bg-zinc-900 text-white px-4 py-2 rounded-full text-[12px] z-50'; t.innerText=m; document.body.appendChild(t); setTimeout(()=>t.remove(),2500); }
+
+function jsonp(url){
+  return new Promise((resolve,reject)=>{
+    const cb='cb_'+Date.now()+'_'+Math.random().toString(36).substr(2,5);
+    window[cb]=(data)=>{ delete window[cb]; document.getElementById(cb)?.remove(); resolve(data); };
+    const s=document.createElement('script'); s.id=cb;
+    s.src=url+(url.includes('?')?'&':'?')+'callback='+cb+'&t='+Date.now();
+    s.onerror=()=>{ delete window[cb]; s.remove(); reject(new Error('fail')); };
+    document.body.appendChild(s);
+    setTimeout(()=>{ if(window[cb]){ delete window[cb]; s.remove(); reject(new Error('Timeout')); } },10000);
+  });
+}
+
+async function fetchData(){
+  loading=true; render();
+  try{
+    const data = await jsonp(SYNC_URL+'?action=read');
+    if(Array.isArray(data)){
+      // dedup tanggal+nik_normalized+jam - 0425 dan 425 dianggap sama
+      const seen={}; const uniq=[];
+      for(const r of data){
+        const normNik = String(r.nik||'').toUpperCase().trim().replace(/^0+/,'') || '0';
+        const key = r.tanggal+'|'+normNik+'|'+r.jam;
+        if(!seen[key]){ seen[key]=true; uniq.push({...r, nik: normNik, nikAsli: r.nik}); }
+      }
+      allData=uniq;
+    }
+  }catch(e){ console.log(e); }
+  try{
+    const kData = await jsonp(SYNC_URL+'?action=readKaryawan');
+    if(Array.isArray(kData) && kData.length>0){
+      const uniq={}; 
+      kData.forEach(x=>{
+        const norm = String(x.nik||'').toUpperCase().trim().replace(/^0+/,'') || '0';
+        if(!uniq[norm]) uniq[norm]={nik: norm, nama: x.nama, pass: x.pass||'1234', nikAsli: x.nik};
+      });
+      karyawanList=Object.values(uniq);
+    }
+  }catch(e){}
+  if(karyawanList.length===0){
+    const uniq={}; allData.forEach(r=>{ 
+      const norm = String(r.nik||'').toUpperCase().trim().replace(/^0+/,'') || '0';
+      if(!uniq[norm]) uniq[norm]={nik: norm, nama:r.nama,pass:'1234'}; 
+    });
+    karyawanList=Object.values(uniq);
+  }
+  loading=false; render();
+}
+
+async function cleanupDobels(){
+  if(!confirm('Hapus data DOBEL di Sheet? Akan hapus duplikat tanggal+nik+jam yang sama.')) return;
+  loading=true; render();
+  try{
+    const res = await jsonp(SYNC_URL+'?action=cleanup');
+    showToast(`✅ Cleanup: ${res.deleted||0} duplikat dihapus`);
+    setTimeout(fetchData, 1000);
+  }catch{ showToast('❌ Gagal cleanup'); loading=false; render(); }
+}
+
+function login(){ const p=document.getElementById('apass').value; if(p===ADMIN_PASS){ localStorage.setItem('admin_login','true'); isLogin=true; fetchData(); } else document.getElementById('aerr').innerText='Password salah'; }
+function logout(){ localStorage.removeItem('admin_login'); isLogin=false; render(); }
+
+function filteredData(){
+  let d=[...allData];
+  if(filterBulan!=='all'){
+    d=d.filter(x=>{ const t=String(x.tanggal); let m=t.split('-')[1]; return String(parseInt(m))===String(parseInt(filterBulan)); });
+  }
+  if(filterTahun!=='all'){
+    d=d.filter(x=>{ const t=String(x.tanggal); let y=t.split('-')[0]; return String(y)===filterTahun; });
+  }
+  if(search.trim()){ const s=search.toLowerCase(); d=d.filter(x=> x.nik.toLowerCase().includes(s) || x.nama.toLowerCase().includes(s)); }
+  return d;
+}
+function groupByKaryawan(data){
+  const map={}; data.forEach(r=>{ if(!map[r.nik]) map[r.nik]={nik:r.nik,nama:r.nama,totalJam:0,totalTUL:0,hari:0}; map[r.nik].totalJam+=Number(r.jam); map[r.nik].totalTUL+=Number(r.tul); map[r.nik].hari+=1; }); return Object.values(map).sort((a,b)=>b.totalTUL-a.totalTUL);
+}
+
+async function resetPass(nik){ if(!confirm(`Reset ${nik} jadi 1234?`)) return; try{ await fetch(SYNC_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'resetPass',nik,newPass:'1234'})}); }catch{} showToast(`🔑 ${nik} reset`); }
+async function hapusKaryawan(nik,nama){ if(!confirm(`Hapus ${nama} (${nik})?`)) return; if(!confirm(`Yakin?`)) return; karyawanList=karyawanList.filter(x=>x.nik.toUpperCase()!==nik.toUpperCase()); try{ await fetch(SYNC_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'deleteKaryawan',nik})}); }catch{} showToast(`🗑️ ${nik} dihapus`); render(); setTimeout(fetchData,1000); }
+function shareWA(nik,nama,tul){ window.open(`https://wa.me/?text=${encodeURIComponent(nama+' '+tul+' tul')}`,'_blank'); }
+function shareAllWA(){ const data=filteredData(); const grouped=groupByKaryawan(data); const bulanNama=['','Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][parseInt(filterBulan)]||filterBulan; const header=`Update tul bulan ${bulanNama} `; let pesan=`${header}\n`+grouped.map(g=>`${g.nama} ${g.totalTUL} tul`).join('\n'); window.open(`https://wa.me/?text=${encodeURIComponent(pesan)}`,'_blank'); }
+
+function render(){
+  const app=document.getElementById('app');
+  if(!isLogin){ app.innerHTML=`<div class="min-h-screen grid place-items-center p-4 bg-zinc-900"><div class="w-full max-w-[360px] bg-white rounded-[24px] p-6"><h1 class="font-bold">Admin</h1><input id="apass" type="password" placeholder="Password admin123" class="w-full mt-4 h-11 rounded-xl border px-4 bg-zinc-50"><div id="aerr" class="text-[11px] text-red-600 mt-1"></div><button onclick="login()" class="w-full mt-3 h-11 rounded-xl bg-zinc-900 text-white font-bold">Masuk</button></div></div>`; return; }
+  const data=filteredData(); const grouped=groupByKaryawan(data); const bulanNama=['','Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  const labelBulan=filterBulan==='all'?'Semua':bulanNama[parseInt(filterBulan)];
+
+  app.innerHTML=`<div class="max-w-[900px] mx-auto min-h-screen bg-white"><div class="px-5 h-[56px] flex items-center justify-between border-b sticky top-0 bg-white z-10"><div class="flex items-center gap-2"><div class="w-8 h-8 rounded-full bg-zinc-900 text-white grid place-items-center font-bold text-[12px]">A</div><div><div class="font-bold text-[14px]">Admin FIX Sinkron</div><div class="text-[10px] text-zinc-500">${grouped.length} karyawan • ${data.length} data (dedup) • ${loading?'⏳':''}</div></div></div><div class="flex gap-2"><button onclick="cleanupDobels()" class="h-8 px-3 rounded-full bg-amber-500 text-white text-[11px] font-bold">🧹 Cleanup Dobel</button><button onclick="fetchData()" class="h-8 px-3 rounded-full bg-zinc-100 text-[11px] font-bold">🔄 Refresh</button><button onclick="logout()" class="h-8 px-3 rounded-full bg-zinc-900 text-white text-[11px] font-bold">Logout</button></div></div>
+    <div class="p-4 space-y-4 bg-[#f6f5f4]">
+      <div class="rounded-xl bg-blue-50 border border-blue-200 p-3 text-[11px] text-blue-800">ℹ️ Fix: Admin & Karyawan sekarang baca Sheet yang sama + anti dobel. Jika angka masih beda, klik <b>🧹 Cleanup Dobel</b> untuk hapus duplikat di Sheet, lalu Refresh.</div>
+      <div class="rounded-[16px] bg-white border p-3 flex gap-2"><select onchange="filterBulan=this.value;render()" class="flex-1 h-10 rounded-xl border bg-zinc-50 px-3 text-[13px] font-semibold"><option value="all" ${filterBulan==='all'?'selected':''}>Semua Bulan</option>${Array.from({length:12},(_,i)=>`<option value="${i+1}" ${filterBulan==i+1?'selected':''}>${bulanNama[i+1]}</option>`).join('')}</select><select onchange="filterTahun=this.value;render()" class="flex-1 h-10 rounded-xl border bg-zinc-50 px-3 text-[13px] font-semibold"><option value="all" ${filterTahun==='all'?'selected':''}>Semua</option><option value="2026" ${filterTahun==='2026'?'selected':''}>2026</option></select><button onclick="shareAllWA()" class="h-10 px-4 rounded-xl bg-green-500 text-white text-[12px] font-bold">WA All</button></div>
+      <div class="rounded-[20px] bg-white border overflow-hidden"><div class="px-4 py-3 border-b flex justify-between items-center"><div class="font-bold text-[13px]">Rekap Total TUL</div><div class="text-[11px] text-zinc-500">${labelBulan} 2026</div></div><table class="w-full text-[12px]"><thead class="bg-zinc-50 text-[10px] uppercase font-bold text-zinc-500"><tr><th class="text-left px-4 py-2">#</th><th class="text-left px-4 py-2">Nama</th><th class="text-center px-4 py-2">TUL</th><th class="text-center px-4 py-2">Share</th></tr></thead><tbody class="divide-y">${grouped.length===0?`<tr><td colspan="4" class="py-10 text-center text-zinc-500">Tidak ada data</td></tr>`:grouped.map((g,i)=>`<tr><td class="px-4 py-3 font-bold">${i+1}</td><td class="px-4 py-3 font-semibold">${g.nama} (${g.nik})</td><td class="px-4 py-3 text-center font-bold">${g.totalTUL} tul<br><span class="text-[10px] text-zinc-500">${g.hari} hari • ${g.totalJam}j</span></td><td class="px-4 py-3 text-center"><button onclick="shareWA('${g.nik}','${g.nama}',${g.totalTUL})" class="h-7 px-3 rounded-full bg-green-500 text-white text-[11px] font-bold">WA</button></td></tr>`).join('')}</tbody></table></div>
+      <div class="rounded-[20px] bg-white border overflow-hidden"><div class="px-4 py-3 border-b flex justify-between items-center"><div class="font-bold text-[13px]">Karyawan</div><input value="${search}" oninput="search=this.value;render()" placeholder="Cari NIK" class="h-8 w-[160px] rounded-full border bg-zinc-50 px-3 text-[11px]"></div><div class="divide-y max-h-[420px] overflow-y-auto">${karyawanList.filter(k=> !search || k.nik.toLowerCase().includes(search.toLowerCase())).map(k=>`<div class="px-4 py-3 flex items-center gap-2"><div class="w-8 h-8 rounded-full bg-zinc-100 grid place-items-center font-bold text-[11px]">${k.nama[0]}</div><div class="flex-1"><div class="font-bold text-[13px]">${k.nama} <span class="font-mono text-[11px] text-zinc-500">${k.nik}</span></div><div class="text-[11px] text-zinc-500">Pass: ${k.pass||'1234'}</div></div><div class="flex gap-1"><button onclick="resetPass('${k.nik}')" class="h-8 px-3 rounded-xl bg-zinc-900 text-white text-[11px] font-bold">simpan</button><button onclick="hapusKaryawan('${k.nik}','${k.nama}')" class="h-8 px-3 rounded-xl bg-red-500 text-white text-[11px] font-bold">Hapus</button></div></div>`).join('')}</div></div>
+    </div>
+  </div>`;
+}
+if(isLogin) fetchData(); else render();
+</script>
+<script>(function(){var loc=location.href.replace(/#.*$/,"");var ATTR_NAMES=["data-product-id","data-productid","data-product_id","product-id","productid","product_id","data-source-entity-id","source-entity-id","source_entity_id","data-product","data-metadata","data-meta"];var DATASET_KEYS=["productId","productid","product_id","sourceEntityId","sourceentityid","source_entity_id","product","metadata","meta"];function readProductId(value){if(typeof value!=="string"||value.length===0)return null;if(/^[0-9]{6,}$/.test(value))return value;var match=value.match(/(?:product(?:_|-)?id|source(?:_|-)?entity(?:_|-)?id)["'=:\s]+([0-9]{6,})/i);return match?match[1]:null}function extractProductId(start){for(var node=start;node&&node!==document.body;node=node.parentElement){for(var i=0;i<ATTR_NAMES.length;i++){var attrValue=node.getAttribute&&node.getAttribute(ATTR_NAMES[i]);var attrProductId=readProductId(attrValue);if(attrProductId)return attrProductId}var dataset=node.dataset||null;if(dataset){for(var j=0;j<DATASET_KEYS.length;j++){var dataValue=dataset[DATASET_KEYS[j]];var dataProductId=readProductId(dataValue);if(dataProductId)return dataProductId}}}return null}function isInlineMediaSlotElement(node){return !!(node&&node.getAttribute&&node.getAttribute("data-clippy-inline-media-slot")!==null)}function findInlineMediaSlot(start){for(var node=start;node&&node!==document.body;node=node.parentElement){if(isInlineMediaSlotElement(node))return node}return null}function readInlineMediaUrl(node){if(!node)return null;return node.getAttribute&&((node.getAttribute("data-clippy-inline-media-url")||node.getAttribute("data-url")||node.getAttribute("data_url")))||node.href||null}function stripHash(url){return String(url).replace(/#.*$/,"")}function urlsMatch(a,b){if(!a||!b)return false;try{return stripHash(new URL(a,loc).href)===stripHash(new URL(b,loc).href)}catch(_){return stripHash(a)===stripHash(b)}}function isFirstPartyReelUrl(value){try{var url=new URL(value,loc);if(url.protocol!=="https:")return false;var host=url.hostname.toLowerCase();var supported=host==="instagram.com"||host.endsWith(".instagram.com")||host==="facebook.com"||host.endsWith(".facebook.com");return supported&&/\/reels?\//i.test(url.pathname)}catch(_){return false}}function isInlineMediaUrlClick(node,href){var slot=findInlineMediaSlot(node);if(!slot)return false;var slotUrl=readInlineMediaUrl(slot);if(slotUrl)return urlsMatch(href,slotUrl);return isFirstPartyReelUrl(href)}function findDataHref(start){for(var node=start;node&&node!==document.body;node=node.parentElement){if(node.getAttribute){var href=node.getAttribute("data-href")||node.getAttribute("data-url");if(href)return{href:href,node:node}}}return null}var nativeOpen=window.open;window.open=function(url){if(parent!==window&&typeof url==="string"&&/^https?:\/\//.test(url)){parent.postMessage({type:"ecto:usercontent-link-click",href:url},"*");return null}return nativeOpen?nativeOpen.apply(window,arguments):null};document.addEventListener("click",function(e){var target=e.target instanceof Element?e.target:null;if(!target)return;if(parent===window)return;var a=target.closest?target.closest("a[href]"):null;if(a&&a.href&&/^https?:\/\//.test(a.href)&&a.href.replace(/#.*$/,"")!==loc){if(isInlineMediaUrlClick(a,a.href))return;var productId=extractProductId(target)||extractProductId(a);if(productId){e.preventDefault();parent.postMessage({type:"ecto-artifact-link-click",productId:productId},"*");return}e.preventDefault();parent.postMessage({type:"ecto:usercontent-link-click",href:a.href},"*");return}var dataHref=findDataHref(target);if(dataHref&&/^https?:\/\//.test(dataHref.href)&&dataHref.href.replace(/#.*$/,"")!==loc){if(isInlineMediaUrlClick(dataHref.node,dataHref.href))return;e.preventDefault();parent.postMessage({type:"ecto:usercontent-link-click",href:dataHref.href},"*")}},true)})();</script><script>(function(){var FOCUS_TYPE="ecto:artifact-focus-request";var CLOSE_TYPE="ecto:artifact-close-request";function focusArtifactDocument(){var body=document.body;if(!body)return;try{window.focus();}catch(e){}if(!body.hasAttribute("tabindex"))body.setAttribute("tabindex","-1");try{body.focus({preventScroll:true});}catch(e){try{body.focus();}catch(e2){}}}window.addEventListener("message",function(event){if(event.source!==window.parent)return;var data=event.data;if(!data||typeof data!=="object"||data.type!==FOCUS_TYPE)return;if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",focusArtifactDocument,{once:true});return;}focusArtifactDocument();});window.addEventListener("keydown",function(event){if(event.key!=="Escape")return;window.setTimeout(function(){if(event.defaultPrevented)return;window.parent.postMessage({type:CLOSE_TYPE},"*");},0);});})();</script></body>
+</html>
