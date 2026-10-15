@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="id"><head><style>
+@font-face {
+  font-family: "Optimistic";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("/fonts/OptimisticAI_VF_Optimized.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Optimistic Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/OptimisticMono_W_TextRegular.woff2") format("woff2");
+}
+:where(html) {
+  font-family: "Optimistic", system-ui, sans-serif;
+}
+:where(code, pre, kbd, samp) {
+  font-family: "Optimistic Mono", ui-monospace, monospace;
+}
+</style><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>AREA EF - Admin</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+body{font-family:Inter,sans-serif;background:#f8fafc;min-height:100vh;}
+.aqua{background:#0e7490;}
+body.tema-ultah{ background:radial-gradient(ellipse at top, #f5d0fe 0%, #fdf4ff 40%, #fae8ff 100%) !important; }
+body.tema-ultah .aqua{ background:linear-gradient(135deg,#a21caf 0%,#ec4899 100%) !important; }
+@keyframes floatUltah{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-12px) rotate(5deg)}}
+@keyframes confettiFall{0%{transform:translateY(-10vh) rotate(0deg) scale(0);opacity:0}10%{opacity:1;transform:scale(1)}90%{opacity:0.8}100%{transform:translateY(110vh) rotate(720deg) scale(0.5);opacity:0}}
+.pernak-ultah{animation:confettiFall linear infinite !important;font-size:20px !important;}
+.ultah-card{background:linear-gradient(135deg,rgba(255,255,255,0.9) 0%,rgba(250,232,255,0.9) 100%);backdrop-filter:blur(16px);border:1px solid rgba(232,121,249,0.3);box-shadow:0 8px 32px rgba(168,85,247,0.2);animation:floatUltah 3s ease-in-out infinite}
+#pernakPernik{ position:fixed; inset:0; pointer-events:none; z-index:0; overflow:hidden; opacity:0.35; }
+.pernak{ position:absolute; font-size:14px; animation: jatuh 8s linear infinite; opacity:0.5; }
+@keyframes jatuh{ 0%{ transform:translateY(-10vh) rotate(0deg); } 100%{ transform:translateY(110vh) rotate(360deg); } }
+</style>
+</head><body>
+<div id="pernakPernik"></div>
+<div id="app" class="relative z-10"></div>
+<script>
+const SYNC_URL='https://script.google.com/macros/s/AKfycbwr3utIlkimCQcJln2Gug7D0XOypnazzboyFiv5oZFFOf_Hk_XGyhKm9G2sx0Su1LU/exec';
+const ADMIN_PASS_DEFAULT='admin123';
+function getAdminPass(){ try{ const c=localStorage.getItem('custom_admin_pass'); if(c) return c; }catch(e){} return ADMIN_PASS_DEFAULT; }
+const TUL_MAP={2:3.5,3:5.5,4:7.5,6:12,7:14,8:17};
+function calcTUL(j){ j=Number(j); if(isNaN(j)||j<=0||j>24) return 0; return TUL_MAP[j]||j*1.5; }
+function parseTglSort(t){ if(!t) return 0; let p=String(t).split(/[-/]/); if(p.length!==3) return 0; let d=Number(p[0]),m=Number(p[1]),y=Number(p[2]); return new Date(y,m-1,d).getTime(); }
+function isJamValid(j){ j=Number(j); return !isNaN(j) && j>0 && j<=24; }
+function normNama(n){return String(n||'').trim().toLowerCase();}
+function normalizeTanggal(t){if(!t)return'';let s=String(t).trim();if(s.includes('T'))s=s.split('T')[0];try{const d=new Date(t);if(!isNaN(d))return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}catch{}return s;}
+function formatTanggal(t){const p=normalizeTanggal(t).split('-');if(p.length===3)return p[2]+'-'+p[1]+'-'+p[0];return t;}
+const DEFAULT_KARYAWAN_AWAL=[{nama:'Aaf'},{nama:'Aditya'},{nama:'Anah'},{nama:'Anisa'},{nama:'Arief'},{nama:'Budi'},{nama:'Dozen'},{nama:'Eka'},{nama:'Nely'},{nama:'Nia'},{nama:'Putri'},{nama:'Supriyadi'},{nama:'Syarif'},{nama:'Topik'},{nama:'Yudi'},{nama:'Zaelani'}];
+function getKaryawanList(){
+  try{
+    const c=localStorage.getItem('custom_karyawan');
+    if(c){ let arr=JSON.parse(c); if(Array.isArray(arr)&&arr.length>0) return arr; }
+  }catch{}
+  return DEFAULT_KARYAWAN_AWAL.slice();
+}
+let DEFAULT_KARYAWAN=getKaryawanList();
+function saveKaryawanList(arr){ try{ localStorage.setItem('custom_karyawan', JSON.stringify(arr)); DEFAULT_KARYAWAN=arr; }catch{} }
+function getCustomMemberPass(){ try{ return JSON.parse(localStorage.getItem('custom_member_pass')||'{}'); }catch{ return {}; } }
+function getCustomMemberPassAdmin(){ return getCustomMemberPass(); }
+function getCustomMemberTgl(){ try{ return JSON.parse(localStorage.getItem('custom_member_tgl')||'{}'); }catch{ return {}; } }
+
+// === WA GRUP ===
+function getWAGroupLink(){ try{ return localStorage.getItem('wa_group_link')||''; }catch(e){ return ''; } }
+function setWAGroupLink(link){ try{ localStorage.setItem('wa_group_link', link); }catch(e){} }
+function openWAGroupSetting(){
+  const current=getWAGroupLink();
+  const link=prompt('Masukkan Link Grup WA AREA EF (contoh: https://chat.whatsapp.com/xxxx):', current||'');
+  if(link!==null){
+    const t=link.trim();
+    setWAGroupLink(t);
+    toast(t ? '✅ Link Grup WA disimpan' : '✅ Mode manual');
+    renderKelolaAnggota();
+    setTimeout(()=>render(),100);
+  }
+}
+function shareToWAGroup(text){
+  try{
+    const groupLink=getWAGroupLink();
+    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(text).catch(()=>{}); }
+    if(groupLink && groupLink.includes('chat.whatsapp.com')){
+      toast('📋 Pesan tercopy! Buka Grup WA...');
+      setTimeout(()=>{ window.open(groupLink, '_blank'); }, 500);
+    }else{
+      window.open('https://wa.me/?text='+encodeURIComponent(text), '_blank');
+      toast('📱 Pilih Grup WA');
+    }
+  }catch(e){ window.open('https://wa.me/?text='+encodeURIComponent(text), '_blank'); }
+}
+function buildUltahWAMessage(nama, umur){
+  let pesan='🎂🎉 SELAMAT ULANG TAHUN 🎉🎂\n\nHalo '+nama+' !\n\n';
+  if(umur>0){ pesan+='Selamat ulang tahun ke-'+umur+'! 🎈\n'; } else { pesan+='Selamat ulang tahun! 🎈\n'; }
+  pesan+='\nSemoga panjang umur, sehat selalu, bahagia, dan sukses! 🙏✨\n\nDari: Keluarga Besar AREA EF';
+  return pesan;
+}
+function buildHariRayaWAMessage(namaHari, ucapan, tgl){
+  let n=(namaHari||'').toLowerCase();
+  if(n.includes('kemerdekaan')) return '🇮🇩 DIRGAHAYU RI 🇮🇩\n\n'+ucapan+'\n\nMerdeka! Dari: AREA EF';
+  if(n.includes('batik')) return '🦚 HARI BATIK NASIONAL 🦚\n\n'+ucapan+'\n\nBangga berkain batik! Dari: AREA EF';
+  if(n.includes('natal')) return '🎄 SELAMAT NATAL 🎄\n\n'+ucapan+'\n\nDari: AREA EF';
+  if(n.includes('idul fitri')) return '🌙 SELAMAT IDUL FITRI 🌙\n\n'+ucapan+'\n\nMinal aidin! Dari: AREA EF';
+  if(n.includes('pancasila')) return '🛡️ HARI PANCASILA 🛡️\n\n'+ucapan+'\n\nDari: AREA EF';
+  return '🎉 '+namaHari+' 🎉\n\n'+ucapan+'\n\nDari: AREA EF';
+}
+function shareHariRayaWA(namaHari, ucapan, tgl){ try{ const txt=buildHariRayaWAMessage(namaHari, ucapan, tgl); shareToWAGroup(txt); }catch(e){} }
+function shareUltahWA(nama, umur){ try{ const txt=buildUltahWAMessage(nama, umur); shareToWAGroup(txt); }catch(e){} }
+
+// === HARI BESAR FIX 4 HARI H-2 s/d H+1 ===
+const HARI_BESAR_TETAP=[
+ {tgl:'01-01',nama:'Tahun Baru',ucapan:'Semoga tahun baru membawa kebahagiaan.',tema:'emas', accent:'border-amber-300', icon:'✨'},
+ {tgl:'21-04',nama:'Hari Kartini',ucapan:'Habis gelap terbitlah terang.',tema:'emas', accent:'border-amber-300', icon:'🌸'},
+ {tgl:'17-08',nama:'Hari Kemerdekaan RI',ucapan:'Dirgahayu Republik Indonesia ke-80',tema:'kemerdekaan', accent:'border-red-400', icon:'🇮🇩'},
+ {tgl:'01-10',nama:'Hari Kesaktian Pancasila',ucapan:'Pancasila sakti perekat persatuan.',tema:'merah', accent:'border-red-300', icon:'🛡️'},
+ {tgl:'02-10',nama:'Hari Batik Nasional',ucapan:'Bangga berkain batik warisan budaya.',tema:'batik', accent:'border-amber-400', icon:'🦚'},
+ {tgl:'28-10',nama:'Hari Sumpah Pemuda',ucapan:'Satu nusa, satu bangsa, satu bahasa.',tema:'merah', accent:'border-red-300', icon:'🔥'},
+ {tgl:'10-11',nama:'Hari Pahlawan',ucapan:'Menghargai jasa pahlawan bangsa.',tema:'merah', accent:'border-slate-300', icon:'🎖️'},
+ {tgl:'25-12',nama:'Hari Raya Natal',ucapan:'Damai di hati, damai di bumi.',tema:'natal', accent:'border-emerald-300', icon:'🎄'}
+];
+const HARI_RAYA_VAR=[
+ {dari:'17-02-2026',sampai:'17-02-2026',nama:'Tahun Baru Imlek',ucapan:'Gong xi fa cai.',tema:'imlek', accent:'border-red-300', icon:'🧧'},
+ {dari:'19-03-2026',sampai:'22-03-2026',nama:'Idul Fitri 1447 H',ucapan:'Minal aidin wal faizin.',tema:'idulfitri', accent:'border-emerald-400', icon:'🌙'},
+ {dari:'26-05-2026',sampai:'28-05-2026',nama:'Idul Adha',ucapan:'Semangat berkurban.',tema:'idadha', accent:'border-emerald-300', icon:'🕋'}
+];
+function getUltahHariIni(){
+  try{
+    const list=getKaryawanList();
+    const tglMap=getCustomMemberTgl();
+    const now=new Date();
+    const dd=String(now.getDate()).padStart(2,'0');
+    const mm=String(now.getMonth()+1).padStart(2,'0');
+    const ultah=[];
+    for(let k of list){
+      let tgl=k.tglLahir || tglMap[k.nama] || '';
+      if(!tgl) continue;
+      let d='', m='';
+      let t=String(tgl).trim();
+      if(t.includes('-')){
+        let p=t.split('-');
+        if(p.length===3){
+          if(p[0].length===4){ m=p[1].padStart(2,'0'); d=p[2].padStart(2,'0'); }
+          else{ d=p[0].padStart(2,'0'); m=p[1].padStart(2,'0'); }
+        }
+      }
+      if(d===dd && m===mm){
+        let y=0;
+        try{
+          let parts=String(tgl).split('-');
+          let year=parts[2] && parts[2].length===4 ? Number(parts[2]) : (parts[0].length===4 ? Number(parts[0]) : 0);
+          if(year>0) y=now.getFullYear()-year;
+        }catch(e){}
+        ultah.push({nama:k.nama, tgl:tgl, umur:y});
+      }
+    }
+    return ultah;
+  }catch(e){ return []; }
+}
+function getTemaUltah(nama, umur){
+  return {nama:'Ulang Tahun '+nama+'!', ucapan: umur>0 ? 'Selamat ulang tahun ke-'+umur+'! Semoga sehat & sukses! 🎉' : 'Selamat ulang tahun '+nama+'! 🎂', tema:'ultah', icon:'🎂', umur:umur};
+}
+function hariBesarHariIni(){
+  const now=new Date(); now.setHours(0,0,0,0); const hasil=[];
+  HARI_BESAR_TETAP.forEach(h=>{
+    const p=h.tgl.split('-');
+    for(const y of [now.getFullYear()-1,now.getFullYear(),now.getFullYear()+1]){
+      const d=new Date(y,+p[1]-1,+p[0]); d.setHours(0,0,0,0);
+      const diff=Math.round((now-d)/86400000);
+      if(diff>=-2 && diff<=1){ hasil.push({h:h,diff:diff}); break; }
+    }
+  });
+  HARI_RAYA_VAR.forEach(h=>{
+    const P=s=>{const a=s.split('-');const d=new Date(+a[2],+a[1]-1,+a[0]);d.setHours(0,0,0,0);return d;};
+    const dari=P(h.dari), sampai=P(h.sampai);
+    const dariX=new Date(dari); dariX.setDate(dariX.getDate()-2);
+    const sampaiX=new Date(sampai); sampaiX.setDate(sampaiX.getDate()+1);
+    if(now>=dariX&&now<=sampaiX){
+      let diff=0;
+      if(now<dari) diff=Math.round((now-dari)/86400000);
+      else if(now>sampai) diff=Math.round((now-sampai)/86400000);
+      if(diff>=-2 && diff<=1){ hasil.push({h:h,diff:diff}); }
+    }
+  });
+  return hasil;
+}
+function getTemaAktif(){
+  try{
+    const ultahList=getUltahHariIni();
+    if(ultahList.length){
+      const u=ultahList[0];
+      const temaU=getTemaUltah(u.nama, u.umur);
+      return {tema:temaU.tema, icon:temaU.icon, pernak:['🎂','🎉'], nama:temaU.nama, h:temaU, isUltah:true};
+    }
+    const daftar=hariBesarHariIni();
+    if(daftar.length){
+      let aktif=daftar[0];
+      if(Math.abs(aktif.diff)<=2){
+        return {tema:aktif.h.tema, icon:aktif.h.icon, pernak:[aktif.h.icon], nama:aktif.h.nama, h:aktif.h, isHariBesar:true};
+      }
+    }
+    return {tema:'biru', icon:'📅', pernak:[], nama:'AREA EF', h:{}};
+  }catch(e){ return {tema:'biru', icon:'📅', pernak:[], h:{}}; }
+}
+function applyTemaHariRaya(){
+  try{
+    const aktif=getTemaAktif();
+    document.body.classList.forEach(c=>{ if(c.startsWith('tema-')) document.body.classList.remove(c); });
+    if(aktif.tema && aktif.tema!=='biru') document.body.classList.add('tema-'+aktif.tema);
+    renderPernakPernik(aktif);
+  }catch(e){}
+}
+function renderPernakPernik(aktif){
+  const cont=document.getElementById('pernakPernik'); if(!cont) return; cont.innerHTML=''; if(!aktif || !aktif.pernak || !aktif.pernak.length) return;
+  if(aktif.isUltah){
+    const emojis=['🎂','🎉','🎈','🎊','✨'];
+    for(let i=0;i<10;i++){ const el=document.createElement('div'); el.className='pernak pernak-ultah'; el.innerText=emojis[i%emojis.length]; el.style.left=(5+Math.random()*90)+'vw'; el.style.animationDuration=(4+Math.random()*4)+'s'; el.style.animationDelay=Math.random()*2+'s'; el.style.top='-20px'; cont.appendChild(el); }
+    return;
+  }
+  for(let i=0;i<3;i++){ const el=document.createElement('div'); el.className='pernak'; el.innerText=aktif.icon; el.style.left=(10+Math.random()*80)+'vw'; el.style.animationDuration=(6+Math.random()*3)+'s'; el.style.top='-20px'; cont.appendChild(el); }
+}
+function confettiUltah(el){
+  try{
+    for(let i=0;i<15;i++){
+      const c=document.createElement('div');
+      c.innerText=['🎉','🎂','🎈','✨'][Math.floor(Math.random()*4)];
+      c.style.position='fixed';
+      c.style.left=(el.getBoundingClientRect().left + Math.random()*el.offsetWidth)+'px';
+      c.style.top=(el.getBoundingClientRect().top)+'px';
+      c.style.fontSize=(16+Math.random()*12)+'px';
+      c.style.pointerEvents='none';
+      c.style.zIndex='9999';
+      c.style.transition='all 1s ease';
+      document.body.appendChild(c);
+      setTimeout(()=>{ c.style.transform='translate('+(Math.random()-0.5)*200+'px, '+( -100-Math.random()*150)+'px) rotate('+(Math.random()*360)+'deg)'; c.style.opacity='0'; },10);
+      setTimeout(()=>c.remove(),1200);
+    }
+  }catch(e){}
+}
+function bannerHariBesarHtml(){
+  try{
+    const daftar=hariBesarHariIni();
+    const ultahHariIni=getUltahHariIni();
+    let html='';
+    if(ultahHariIni.length){
+      html+=ultahHariIni.map(u=>{
+        const temaU=getTemaUltah(u.nama, u.umur);
+        return '<div class="ultah-card rounded-[16px] p-4 flex gap-3 items-center border border-fuchsia-200 shadow mx-3 mt-3"><div class="w-14 h-14 rounded-[14px] bg-gradient-to-br from-fuchsia-500 to-pink-500 grid place-items-center text-[28px] cursor-pointer" onclick="confettiUltah(this.closest(\'.ultah-card\'))">🎂</div><div class="flex-1"><div class="font-bold text-[14px]">🎉 '+temaU.nama+'</div><div class="text-[11px] mt-1 bg-white/80 rounded-[8px] px-2 py-1">'+temaU.ucapan+'</div><div class="flex gap-2 mt-2"><button onclick="confettiUltah(this.closest(\'.ultah-card\'))" class="text-[9px] bg-white border px-2 py-1 rounded-full">🎊 Confetti</button><button onclick="shareUltahWA(\''+u.nama+'\', '+u.umur+')" class="text-[9px] bg-emerald-500 text-white px-2 py-1 rounded-full">📱 WA</button></div></div></div>';
+      }).join('');
+    }
+    const hari4=daftar.filter(d=>d.diff>=-2 && d.diff<=1);
+    if(hari4.length){
+      html+=hari4.map(it=>{
+        const icon=it.h.icon||'🎉';
+        const tglInfo=it.h.tgl||it.h.dari||'';
+        const ucapan=it.h.ucapan||'';
+        const namaSafe=(it.h.nama||'').replace(/'/g,"\\'");
+        const ucapanSafe=(it.h.ucapan||'').replace(/'/g,"\\'");
+        const isToday=it.diff===0;
+        return '<div class="bg-white border border-slate-200 border-l-[5px] '+(it.h.accent||'border-amber-300')+' rounded-[14px] p-3 flex gap-3 items-center shadow-sm mx-3 mt-3"><div class="w-12 h-12 rounded-[12px] bg-slate-50 border grid place-items-center text-[24px]">'+icon+'</div><div class="flex-1"><div class="flex items-center gap-2"><div class="font-bold text-[13px]">'+it.h.nama+'</div>'+(isToday?'<span class="text-[8px] bg-slate-900 text-white px-2 py-0.5 rounded-full">HARI INI</span>':'')+'</div><div class="text-[11px] text-slate-600 mt-1">'+ucapan+'</div><div class="flex gap-2 mt-2"><span class="text-[9px] bg-slate-100 border px-2 py-0.5 rounded-full">'+tglInfo+'</span><button onclick="shareHariRayaWA(\''+namaSafe+'\', \''+ucapanSafe+'\', \''+tglInfo+'\')" class="text-[9px] bg-emerald-500 text-white px-2 py-1 rounded-full">📱 WA</button></div></div></div>';
+      }).join('');
+    }
+    if(!html) return '';
+    return '<div class="pb-2">'+html+'</div>';
+  }catch(e){return '';}
+}
+
+// === AUTO WA ===
+function getBulanLaluInfo(){
+  const now=new Date();
+  let bulanLalu = now.getMonth();
+  let tahunLalu = now.getFullYear();
+  if(bulanLalu===0){ bulanLalu=12; tahunLalu--; }
+  return {bulan: bulanLalu, tahun: tahunLalu, key: tahunLalu+'-'+String(bulanLalu).padStart(2,'0')};
+}
+function buildRekapTextUntukBulan(bulanNum, tahunNum){
+  const bulanNames={1:'Januari',2:'Februari',3:'Maret',4:'April',5:'Mei',6:'Juni',7:'Juli',8:'Agustus',9:'September',10:'Oktober',11:'November',12:'Desember'};
+  const map=new Map();
+  allData.forEach(r=>{const key=r.tanggalNorm+'|'+normNama(r.nama)+'|'+r.jam; if(!map.has(key)) map.set(key,r);});
+  let d=Array.from(map.values()).filter(r=> {
+    const parts=r.tanggalNorm.split('-');
+    if(parts.length!==3) return false;
+    const b=Number(parts[1]); const y=Number(parts[0]);
+    return b===Number(bulanNum) && y===Number(tahunNum);
+  });
+  const m={};
+  d.forEach(r=>{const k=normNama(r.nama); if(!m[k]) m[k]={nama:r.nama,totalTUL:0,count:0}; m[k].totalTUL+=Number(r.tul); m[k].count+=1;});
+  const grouped=Object.values(m).sort((a,b)=> b.totalTUL - a.totalTUL);
+  if(grouped.length===0) return null;
+  let blnName=bulanNames[Number(bulanNum)]+' '+tahunNum;
+  let text='*REKAP LEMBUR AREA EF - '+blnName.toUpperCase()+'*\n';
+  text+='Periode: 01-'+String(bulanNum).padStart(2,'0')+'-'+tahunNum+' s/d akhir bulan\n\n';
+  grouped.forEach((g,i)=>{ text+=(i+1)+'. '+g.nama+' - '+g.totalTUL+' TUL ('+g.count+' hari)\n'; });
+  text+='\nTotal: '+grouped.reduce((s,g)=>s+g.totalTUL,0)+' TUL dari '+grouped.length+' orang';
+  text+='\n\n_Dikirim otomatis oleh sistem AREA EF_';
+  return text;
+}
+function isAutoTanpaKlik(){ try{ return localStorage.getItem('wa_auto_tanpa_klik')==='1'; }catch(e){ return false; } }
+function toggleAutoTanpaKlik(){
+  try{
+    const cur=isAutoTanpaKlik();
+    localStorage.setItem('wa_auto_tanpa_klik', cur?'0':'1');
+    toast(cur?'🔕 Mode tanpa klik OFF':'🔔 Mode tanpa klik ON - WA auto buka 5 detik!');
+    render();
+  }catch(e){}
+}
+function cekOtomatisShareWA(){
+  try{
+    const now=new Date();
+    const todayKey=now.toISOString().split('T')[0];
+    const jam=now.getHours();
+    if(jam<6 || jam>21) return;
+    const lastHourCheck=localStorage.getItem('last_auto_hour_check');
+    const currentHourKey=todayKey+'-'+jam;
+    if(lastHourCheck===currentHourKey) return;
+    localStorage.setItem('last_auto_hour_check', currentHourKey);
+    let pesanAuto=[];
+    try{
+      const ultah=getUltahHariIni();
+      if(ultah && ultah.length>0){
+        const ultahKey='ultah_'+todayKey;
+        const lastUltahShare=localStorage.getItem('last_auto_ultah_share');
+        if(lastUltahShare!==ultahKey){
+          ultah.forEach(u=>{
+            pesanAuto.push({type:'ultah', judul:'🎂 Ultah '+u.nama, text: buildUltahWAMessage(u.nama, u.umur) , key:ultahKey, namaHari:u.nama});
+          });
+        }
+      }
+    }catch(e){}
+    try{
+      const hariBesar=hariBesarHariIni();
+      if(hariBesar && hariBesar.length>0){
+        hariBesar.forEach(d=>{
+          if(d.diff>=-2 && d.diff<=1){
+            const lastHariShare=localStorage.getItem('last_auto_hari_'+d.h.nama);
+            if(lastHariShare!==todayKey){
+              let txt=buildHariRayaWAMessage(d.h.nama, d.h.ucapan, d.h.tgl||d.h.dari);
+              pesanAuto.push({type:'hariraya', judul:d.h.icon+' '+d.h.nama, text:txt, key:'hari_'+d.h.nama, namaHari:d.h.nama});
+            }
+          }
+        });
+      }
+    }catch(e){}
+    try{
+      const isTanggal1=now.getDate()===1;
+      const autoEnabled=localStorage.getItem('auto_wa_enabled')!=='0';
+      if(isTanggal1 && autoEnabled){
+        const info=getBulanLaluInfo();
+        const lastRekap=localStorage.getItem('last_auto_wa_sent');
+        if(lastRekap!==info.key){
+          const rekapText=buildRekapTextUntukBulan(info.bulan, info.tahun);
+          if(rekapText){
+            pesanAuto.push({type:'rekap', judul:'📊 Rekap '+info.bulan+'/'+info.tahun, text:rekapText, key:info.key});
+          }
+        }
+      }
+    }catch(e){}
+    if(pesanAuto.length===0) return;
+    let finalText='';
+    let judulList=pesanAuto.map(p=>p.judul).join(', ');
+    if(pesanAuto.length===1){ finalText=pesanAuto[0].text; }
+    else{
+      finalText='📢 *INFO OTOMATIS AREA EF - '+todayKey+'* 📢\n\n';
+      pesanAuto.forEach((p,i)=>{ finalText+=(i+1)+'. *'+p.judul+'*\n'+p.text+'\n\n━━━━━━━━━━━━\n\n'; });
+      finalText+='_Dikirim otomatis_';
+    }
+    const existing=document.getElementById('autoWaBannerModern');
+    if(existing) existing.remove();
+    const tanpaKlik=isAutoTanpaKlik();
+    const groupLink=getWAGroupLink();
+    const adaGroup=groupLink && groupLink.includes('chat.whatsapp.com');
+    const wrap=document.createElement('div');
+    wrap.id='autoWaBannerModern';
+    wrap.innerHTML='<div class="mx-3 mt-3 '+(tanpaKlik?'bg-gradient-to-r from-purple-600 to-indigo-600':'bg-gradient-to-r from-emerald-500 to-teal-500')+' rounded-[16px] p-4 shadow-lg text-white relative overflow-hidden"><div class="absolute top-0 right-0 w-32 h-32 bg-white/20 rounded-full blur-xl"></div><div class="relative flex justify-between items-center gap-3"><div class="flex-1"><div class="flex items-center gap-2"><div class="w-2 h-2 bg-white rounded-full animate-pulse"></div><div class="font-bold text-[13px]">'+(tanpaKlik?'⚡ OTOMATIS TANPA KLIK':'🤖 Share WA Otomatis')+'</div><span class="text-[9px] bg-white/20 px-2 py-0.5 rounded-full">'+pesanAuto.length+' pesan</span></div><div class="text-[11px] mt-1 opacity-90 leading-[1.3]">'+judulList+'</div><div class="text-[9px] mt-1 opacity-70">'+(tanpaKlik?'Akan auto buka WA dalam 5 detik...':'H-2 s/d H+1 untuk hari raya & ultah. Tap Kirim.')+' '+(adaGroup?'| Grup: ✅':'| Grup: Belum set')+'</div>'+(tanpaKlik?'<div class="mt-2 w-full bg-white/20 rounded-full h-1.5 overflow-hidden"><div id="autoProgress" class="h-full bg-white rounded-full transition-all duration-100" style="width:0%"></div></div>':'')+'</div><div class="flex flex-col gap-1.5"><button onclick="kirimAutoWAModern()" class="h-8 px-4 rounded-full bg-white '+(tanpaKlik?'text-purple-600':'text-emerald-600')+' text-[11px] font-bold shadow">'+(tanpaKlik?'⏳ Auto...':'📤 Kirim')+'</button><button onclick="document.getElementById(\'autoWaBannerModern\').remove()" class="h-6 px-3 rounded-full bg-white/20 text-white text-[9px]">Nanti</button></div></div></div>';
+    const app=document.getElementById('app');
+    if(app && app.firstChild){ app.insertBefore(wrap, app.firstChild.nextSibling); }
+    window._autoWAText=finalText;
+    window._autoWAKeys=pesanAuto;
+    if(tanpaKlik){
+      let progress=0;
+      const interval=setInterval(()=>{
+        progress+=2;
+        const bar=document.getElementById('autoProgress');
+        if(bar) bar.style.width=progress+'%';
+        if(progress>=100){ clearInterval(interval); kirimAutoWAModern(); }
+      },100);
+      setTimeout(()=>{ clearInterval(interval); if(document.getElementById('autoWaBannerModern')){ kirimAutoWAModern(); } },5000);
+    }
+  }catch(e){ console.log('auto share error', e); }
+}
+function kirimAutoWAModern(){
+  try{
+    const text=window._autoWAText;
+    const keys=window._autoWAKeys||[];
+    if(!text) return;
+    const today=new Date().toISOString().split('T')[0];
+    keys.forEach(k=>{
+      if(k.type==='ultah'){ localStorage.setItem('last_auto_ultah_share', k.key); }
+      if(k.type==='hariraya'){ localStorage.setItem('last_auto_hari_'+k.namaHari, today); }
+      if(k.type==='rekap'){ localStorage.setItem('last_auto_wa_sent', k.key); }
+    });
+    const banner=document.getElementById('autoWaBannerModern');
+    if(banner) banner.remove();
+    shareToWAGroup(text);
+  }catch(e){}
+}
+function toggleAutoWA(){
+  const cur=localStorage.getItem('auto_wa_enabled')!=='0';
+  localStorage.setItem('auto_wa_enabled', cur?'0':'1');
+  toast(cur?'🔕 Auto WA OFF':'🔔 Auto WA ON');
+  render();
+}
+function testAutoWA(){
+  const info=getBulanLaluInfo();
+  const text=buildRekapTextUntukBulan(info.bulan, info.tahun) || 'Test pesan auto WA AREA EF';
+  if(confirm('Test kirim WA?\n\n'+text.slice(0,200))){
+    shareToWAGroup(text);
+  }
+}
+function kirimAutoWA(){ testAutoWA(); }
+function waAll(){
+  const data=filteredData(); const grouped=groupByKaryawan(data);
+  let txt='*REKAP LEMBUR AREA EF*\n\n'; grouped.forEach((g,i)=>{txt+=(i+1)+'. '+g.nama+' - '+g.totalTUL+' TUL ('+g.count+' hari)\n';}); txt+='\nTotal: '+grouped.reduce((s,g)=>s+g.totalTUL,0)+' TUL';
+  shareToWAGroup(txt);
+}
+
+// === DATA & RENDER ===
+let allData=[]; let isLogin=!!localStorage.getItem('admin_login'); let activeTab='rekap'; let filterBulan=String(new Date().getMonth()+1);
+function toast(m){const t=document.createElement('div');t.className='fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-4 py-2 rounded-full text-[12px] font-medium z-50 shadow-lg';t.innerText=m;document.body.appendChild(t);setTimeout(()=>t.remove(),2500);}
+function jsonp(url){return new Promise((resolve,reject)=>{const cb='cb_'+Date.now()+Math.floor(Math.random()*1000); window[cb]=(d)=>{delete window[cb]; document.getElementById(cb)?.remove(); if(Array.isArray(d)){try{localStorage.setItem('cache_lembur',JSON.stringify(d));}catch{} resolve(d);} else resolve(d);}; const s=document.createElement('script'); s.id=cb; s.src=url+(url.includes('?')?'&':'?')+'callback='+cb+'&_='+Date.now()+Math.random(); s.onerror=()=>{delete window[cb]; s.remove(); try{const c=localStorage.getItem('cache_lembur'); if(c){resolve(JSON.parse(c)); return;}}catch{} reject(new Error('Offline'));}; document.body.appendChild(s);});}
+async function fetchData(force=false){
+  if(force){ try{ localStorage.removeItem('cache_lembur'); }catch{} allData=[]; }
+  if(!force){ try{const c=localStorage.getItem('cache_lembur'); if(c && allData.length===0){const j=JSON.parse(c); allData=j.map(r=>({tanggal:r.tanggal,tanggalNorm:normalizeTanggal(r.tanggal),nama:r.nama||r.nik,jam:Number(r.jam||0),tul:calcTUL(Number(r.jam||0))})); render();}}catch{} }
+  try{
+    const j=await jsonp(SYNC_URL+'?action=read&_nocache='+Date.now()+Math.random());
+    if(Array.isArray(j)){
+      let raw=j.map(r=>{let jam=Number(r.jam||0); if(!isJamValid(jam)) jam=0; return {tanggal:r.tanggal,tanggalNorm:normalizeTanggal(r.tanggal),nama:r.nama||r.nik,jam:jam,tul:calcTUL(jam)};}).filter(x=>x.nama && x.jam>0);
+      allData=raw; try{ localStorage.setItem('cache_lembur', JSON.stringify(allData)); }catch{}
+    }
+  }catch(e){ try{const c=localStorage.getItem('cache_lembur'); if(c){ const j=JSON.parse(c); allData=j.map(r=>({tanggal:r.tanggal,tanggalNorm:normalizeTanggal(r.tanggal),nama:r.nama||r.nik,jam:Number(r.jam||0),tul:calcTUL(Number(r.jam||0))})); }}catch{} }
+  allData.sort((a,b)=> parseTglSort(a.tanggalNorm||a.tanggal) - parseTglSort(b.tanggalNorm||b.tanggal)); render();
+}
+function login(){const p=document.getElementById('apass').value; const curPass=getAdminPass(); if(p===curPass){localStorage.setItem('admin_login','1'); isLogin=true; fetchData();} else document.getElementById('aerr').innerText='Password salah';}
+function logout(){localStorage.removeItem('admin_login'); isLogin=false; render();}
+function filteredData(){ if(filterBulan==='all') return allData; return allData.filter(r=> Number(r.tanggalNorm.split('-')[1])===Number(filterBulan)); }
+function groupByKaryawan(data){const m={}; data.forEach(r=>{const k=normNama(r.nama); if(!m[k]) m[k]={nama:r.nama,totalTUL:0,count:0}; m[k].totalTUL+=r.tul; m[k].count+=1;}); return Object.values(m).sort((a,b)=>b.totalTUL-a.totalTUL);}
+function groupByTanggal(data){const m={}; data.forEach(r=>{if(!m[r.tanggalNorm]) m[r.tanggalNorm]={tanggal:r.tanggalNorm,rows:[]}; m[r.tanggalNorm].rows.push(r);}); return Object.values(m).sort((a,b)=>new Date(b.tanggal)-new Date(a.tanggal));}
+function hapusTanggal(tgl){ if(!confirm('Hapus semua tgl '+tgl+'?')) return; allData=allData.filter(r=>r.tanggalNorm!==tgl); try{localStorage.setItem('cache_lembur', JSON.stringify(allData));}catch{} render(); fetch(SYNC_URL,{method:'POST', body: JSON.stringify({action:'deleteTanggal', tanggal:tgl})}); }
+function hapusTransaksi(tgl,nama,jam){ if(!confirm('Hapus '+nama+' '+tgl+'?')) return; allData=allData.filter(r=>!(r.tanggalNorm===tgl && normNama(r.nama)===normNama(nama) && r.jam===jam)); try{localStorage.setItem('cache_lembur', JSON.stringify(allData));}catch{} render(); }
+function openPesan(){ document.getElementById('modalPesan').classList.remove('hidden'); }
+function closePesan(){ document.getElementById('modalPesan').classList.add('hidden'); }
+let parsedPesan=[];
+function parsePlan(){
+  const txt=document.getElementById('txtPesan').value;
+  const aliasMap={'kuncoro budi':'Budi','kuncoro':'Budi','neli':'Nely','nely':'Nely','annisa':'Anisa','aditya zozo':'Aditya'};
+  const isValidName=s=>/^[A-Za-z ]{2,30}$/.test(s);
+  const daftarValid=new Set(DEFAULT_KARYAWAN.map(k=>k.nama.toLowerCase()));
+  let tglPlan=new Date().toISOString().slice(0,10).split('-').reverse().join('-'); // DD-MM-YYYY to YYYY-MM-DD
+  tglPlan=new Date().toISOString().slice(0,10);
+  let jamVal=3;
+  const timeMatch=txt.match(/(\d{1,2})[.:](\d{2})\s*(wib|wita|wit)?/i);
+  const jamMatch=txt.match(/(\d+)\s*j\b/i);
+  if(jamMatch) jamVal=Number(jamMatch[1]);
+  let validNames=[];
+  const after=txt.split(/\n/).slice(1).join(',');
+  let names=after.split(',').map(s=>s.trim()).filter(Boolean);
+  for(let n of names){ let sub=n.split(/\s+/); for(let s of sub){ s=s.trim().replace(/[^A-Za-z]/g,''); if(!s) continue; let low=s.toLowerCase(); if(aliasMap[low]) s=aliasMap[low]; if(isValidName(s)){ s=s.charAt(0).toUpperCase()+s.slice(1).toLowerCase(); let canonical=DEFAULT_KARYAWAN.find(k=>k.nama.toLowerCase()===(aliasMap[low]?aliasMap[low].toLowerCase():low)); if(canonical) s=canonical.nama; if(daftarValid.has(s.toLowerCase())) validNames.push(s); } } }
+  validNames=[...new Set(validNames)];
+  parsedPesan=validNames.map(nama=>({tanggal:tglPlan,tanggalNorm:tglPlan,nama:nama,jam:jamVal,tul:calcTUL(jamVal)}));
+  const prev=document.getElementById('previewPesan'); prev.classList.remove('hidden');
+  if(parsedPesan.length===0){ prev.innerHTML='<span class=text-red-600>❌ Tidak ada nama valid.</span>'; return; }
+  prev.innerHTML='<b>✅ Valid '+parsedPesan.length+' orang:</b><br>'+parsedPesan.map(p=>'• '+p.nama+' - '+p.jam+'j = '+p.tul+' TUL').join('<br>');
+}
+async function simpanPesan(){
+  if(parsedPesan.length===0){ parsePlan(); if(parsedPesan.length===0) return; }
+  let toSave=parsedPesan.filter(p=>{ let exists=allData.some(a=> normalizeTanggal(a.tanggalNorm||a.tanggal)===p.tanggal && normNama(a.nama)===normNama(p.nama)); return !exists; });
+  if(toSave.length===0){ alert('❌ Semua sudah ada'); return; }
+  if(!confirm('Simpan '+toSave.length+' orang tanggal '+toSave[0].tanggal+'?')) return;
+  const items=toSave.map(p=>({tanggal:p.tanggal.split('-').reverse().join('-'), nama:p.nama, jam:p.jam}));
+  for(let p of toSave){ allData.push(p); }
+  allData.sort((a,b)=> parseTglSort(a.tanggalNorm||a.tanggal) - parseTglSort(b.tanggalNorm||b.tanggal));
+  try{ localStorage.setItem('cache_lembur', JSON.stringify(allData)); }catch{}
+  document.getElementById('modalPesan').classList.add('hidden'); render();
+  try{ await fetch(SYNC_URL,{method:'POST', body: JSON.stringify({action:'addBulk', items: items})}); toast('✅ Tersimpan'); }catch(e){ toast('⚠️ Tersimpan lokal'); }
+}
+function selectAllMassal(){ document.querySelectorAll('#massalList input[type=checkbox]').forEach(cb=>cb.checked=true); }
+function handleInputMassal(){
+  const tgl=document.getElementById('massalTgl').value;
+  const jam=Number(document.getElementById('massalJam').value);
+  const checked=[...document.querySelectorAll('#massalList input:checked')].map(cb=>cb.value);
+  if(!tgl||checked.length===0){ alert('Pilih tgl dan orang'); return; }
+  const items=checked.map(nama=>({tanggal:tgl.split('-').reverse().join('-'), nama:nama, jam:jam}));
+  items.forEach(it=>{ allData.push({tanggal:normalizeTanggal(tgl),tanggalNorm:normalizeTanggal(tgl),nama:it.nama,jam:it.jam,tul:calcTUL(it.jam)}); });
+  try{ localStorage.setItem('cache_lembur', JSON.stringify(allData)); }catch{}
+  render();
+  fetch(SYNC_URL,{method:'POST', body: JSON.stringify({action:'addBulk', items: items})});
+  toast('✅ '+checked.length+' orang disimpan');
+}
+function openKelolaAnggota(){ document.getElementById('modalKelolaAnggota').classList.remove('hidden'); renderKelolaAnggota(); }
+function closeKelolaAnggota(){ document.getElementById('modalKelolaAnggota').classList.add('hidden'); }
+function tambahAnggota(){ const inp=document.getElementById('inputNamaBaru'); const nama=(inp.value||'').trim(); if(!nama){ alert('Isi nama'); return; } if(!/^[A-Za-z ]{2,30}$/.test(nama)){ alert('Nama hanya huruf'); return; } const cur=getKaryawanList(); if(cur.some(k=>k.nama.toLowerCase()===nama.toLowerCase())){ alert('Sudah ada'); return; } const baru=[...cur,{nama:nama}]; saveKaryawanList(baru); inp.value=''; renderKelolaAnggota(); render(); toast('✅ '+nama+' ditambah'); }
+function hapusAnggota(nama){ if(!confirm('Hapus '+nama+'?')) return; const cur=getKaryawanList().filter(k=>k.nama!==nama); saveKaryawanList(cur); renderKelolaAnggota(); render(); toast('🗑️ '+nama+' dihapus'); }
+
+function resetSemuaLoginAnggota(){
+  if(!confirm('⚠️ RESET SEMUA LOGIN ANGGOTA?\n\nSemua anggota yang sudah daftar (password & tgl lahir) akan terhapus dan harus daftar ulang!\n\nLanjutkan?')) return;
+  if(!confirm('Yakin? Semua akun anggota akan hilang!')) return;
+  try{
+    localStorage.removeItem('custom_member_pass');
+    localStorage.removeItem('custom_member_tgl');
+    localStorage.removeItem('has_registered');
+    localStorage.removeItem('member_name');
+    localStorage.removeItem('force_daftar');
+    // Biarkan custom_karyawan tetap ada agar daftar nama tidak hilang
+    toast('🗑️ Semua login anggota di-reset! Anggota harus daftar ulang');
+    renderKelolaAnggota();
+    render();
+  }catch(e){ alert('Gagal: '+e.message); }
+}
+function resetTotalSemua(){
+  if(!confirm('RESET TOTAL SEMUA DATA? Termasuk daftar nama karyawan custom?')) return;
+  if(!confirm('KONFIRMASI TERAKHIR: Semua data akan hilang!')) return;
+  try{
+    localStorage.clear();
+    toast('💥 Reset total! Semua data hilang');
+    setTimeout(()=>{ location.reload(); }, 1000);
+  }catch(e){}
+}
+
+function renderKelolaAnggota(){
+  const listEl=document.getElementById('listKelolaAnggota'); if(!listEl) return;
+  const cur=getKaryawanList().slice().sort((a,b)=> a.nama.localeCompare(b.nama)); const passMap=getCustomMemberPassAdmin(); const sudahDaftar=cur.filter(k=>k.tglLahir||passMap[k.nama]).length;
+  const groupLink=getWAGroupLink();
+  const groupStatus=groupLink ? (groupLink.length>30 ? groupLink.substring(0,30)+'...' : groupLink) : 'Belum set - tap Setting';
+  const waStatusEl=document.getElementById('waGroupStatus');
+  if(waStatusEl){ waStatusEl.innerText=groupStatus; }
+  listEl.innerHTML='<div class="bg-slate-50 border border-slate-200 rounded-[12px] p-3 mb-3"><div class="font-semibold text-[11px] text-slate-700 tracking-wide">RINGKASAN ANGGOTA</div><div class="grid grid-cols-3 gap-2 mt-2 text-center"><div class="bg-white rounded-lg p-2 border border-slate-200"><div class="font-bold text-[14px]">'+cur.length+'</div><div class="text-[9px] text-slate-500">TOTAL</div></div><div class="bg-white rounded-lg p-2 border border-emerald-200"><div class="font-bold text-[14px] text-emerald-600">'+sudahDaftar+'</div><div class="text-[9px] text-slate-500">DAFTAR</div></div><div class="bg-white rounded-lg p-2 border border-slate-200"><div class="font-bold text-[14px]">'+(cur.length-sudahDaftar)+'</div><div class="text-[9px] text-slate-500">BELUM</div></div></div></div>'+cur.map(k=>{
+    const isDaftar=!!(k.tglLahir||passMap[k.nama]); const badge=isDaftar?'<span class="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">Aktif</span>':'<span class="text-[9px] bg-slate-50 text-slate-500 border border-slate-200 px-2 py-0.5 rounded-full">Belum</span>';
+    return '<div class="flex justify-between items-center bg-white border border-slate-200 rounded-[12px] px-3 py-2.5"><div class="flex items-center gap-2.5 flex-1"><div class="w-8 h-8 rounded-full bg-slate-50 border border-slate-200 grid place-items-center font-semibold text-[11px]">'+k.nama.charAt(0)+'</div><div class="flex-1"><div class="font-medium text-[12px] flex items-center gap-2">'+k.nama+' '+badge+'</div><div class="text-[10px] text-slate-500 mt-0.5">'+(k.tglLahir?k.tglLahir:'Belum isi tgl lahir')+'</div></div></div><button onclick="hapusAnggota(\''+k.nama+'\')" class="w-7 h-7 rounded-full bg-slate-50 border border-slate-200 text-slate-400 grid place-items-center">✕</button></div>';
+  }).join('');
+}
+function cekAnggotaTerdaftarAdmin(){
+  const list=getKaryawanList();
+  const pass=getCustomMemberPass();
+  const tgl=getCustomMemberTgl();
+  let txt='Daftar Anggota Terdaftar:\n\n';
+  list.forEach(k=>{
+    txt+=k.nama+' - '+(tgl[k.nama]||k.tglLahir||'Belum')+' - '+(pass[k.nama]?'Ada pass':'Belum')+'\n';
+  });
+  alert(txt);
+}
+
+function render(){
+  applyTemaHariRaya(); try{ cekOtomatisShareWA(); }catch(e){}
+  const app=document.getElementById('app');
+  if(!isLogin){
+    app.innerHTML='<div class="min-h-screen grid place-items-center p-4"><div class="bg-white rounded-[20px] p-6 w-full max-w-sm shadow-sm border border-slate-200"><div class="text-center mb-5"><div class="w-12 h-12 rounded-full bg-slate-900 mx-auto grid place-items-center text-white font-bold text-[14px]">EF</div><div class="font-bold text-[16px] mt-3 tracking-tight">AREA EF - ADMIN</div><div class="text-[11px] text-slate-500 mt-1">Kelola lembur harian</div></div><input id="apass" type="password" placeholder="Password" class="w-full h-11 rounded-[12px] border border-slate-200 px-4 text-[14px] focus:outline-none focus:border-slate-900"><div id="aerr" class="text-[11px] text-red-500 mt-2"></div><button onclick="login()" class="w-full h-11 rounded-[12px] bg-slate-900 text-white font-semibold mt-4 text-[13px]">Masuk</button></div></div>';
+    return;
+  }
+  const data=filteredData(); const grouped=groupByKaryawan(data); const harian=groupByTanggal(data);
+  const hbHtml=bannerHariBesarHtml();
+  app.innerHTML='<div class="aqua sticky top-0 z-20 px-4 py-3.5 flex justify-between items-center text-white"><div class="flex items-center gap-3"><div class="font-bold text-[15px] tracking-tight">AREA EF</div><div class="hidden md:flex text-[10px] bg-white/10 px-2.5 py-1 rounded-full">'+new Date().toLocaleDateString('id-ID',{day:'2-digit',month:'short'}).toUpperCase()+'</div></div><div class="flex items-center gap-2"><button onclick="logout()" class="h-8 px-3.5 rounded-full bg-black text-white text-[11px] font-medium">Keluar</button></div></div><div class="px-3 py-3 flex gap-2 items-center overflow-auto"><button onclick="openPesan()" class="h-9 px-4 rounded-full bg-slate-900 text-white text-[11px] font-semibold shrink-0">＋ Input Plan</button><div class="flex bg-white rounded-full p-1 shadow-sm border border-slate-200"><button onclick="activeTab=\'input\';render()" class="h-7 px-4 rounded-full text-[11px] font-medium '+(activeTab==='input'?'bg-slate-900 text-white':'text-slate-500')+'">Input</button><button onclick="activeTab=\'history\';render()" class="h-7 px-4 rounded-full text-[11px] font-medium '+(activeTab==='history'?'bg-slate-900 text-white':'text-slate-500')+'">History</button><button onclick="activeTab=\'rekap\';render()" class="h-7 px-4 rounded-full text-[11px] font-medium '+(activeTab==='rekap'?'bg-slate-900 text-white':'text-slate-500')+'">Rekap</button></div><button onclick="waAll()" class="h-9 px-3.5 rounded-full bg-emerald-600 text-white text-[11px] font-medium ml-auto">Share WA</button></div>'+hbHtml+'<div class="p-3">'+(activeTab==='input'?'<div class="space-y-3"><div class="bg-white border border-slate-200 rounded-[16px] p-3 shadow-sm"><div class="flex gap-2 items-end"><div class="flex-1"><div class="text-[10px] font-medium text-slate-500 mb-1 ml-1">Tanggal</div><input id="massalTgl" type="date" value="'+new Date().toISOString().slice(0,10)+'" class="w-full h-9 rounded-[10px] border border-slate-200 bg-white px-3 text-[12px]"></div><div class="w-[70px]"><div class="text-[10px] font-medium text-slate-500 mb-1 ml-1">Jam</div><select id="massalJam" class="w-full h-9 rounded-[10px] border border-slate-200 bg-white px-2 text-[12px]"><option value="2">2j</option><option value="3" selected>3j</option><option value="4">4j</option><option value="6">6j</option><option value="7">7j</option><option value="8">8j</option></select></div><button onclick="selectAllMassal()" class="h-9 px-3 rounded-[10px] bg-white border border-slate-900 text-slate-900 text-[11px] font-medium">Pilih</button><button onclick="handleInputMassal()" class="h-9 px-4 rounded-[10px] bg-slate-900 text-white text-[11px] font-medium">Simpan</button></div><div id="massalList" class="grid grid-cols-2 gap-1.5 mt-3 max-h-[55vh] overflow-auto"></div><div class="mt-3 flex justify-between items-center"><div class="text-[11px] text-slate-500">Total '+DEFAULT_KARYAWAN.length+' anggota</div><button onclick="openKelolaAnggota()" class="h-8 px-3 rounded-full bg-white border border-slate-200 text-[11px] font-medium">Kelola Anggota</button></div></div></div>':'')+(activeTab==='history'?'<div class="space-y-2.5">'+(harian.length===0?'<div class="bg-white border border-slate-200 rounded-[16px] p-8 text-center"><div class="font-semibold text-[13px]">Belum ada data</div><div class="text-[11px] text-slate-500 mt-1">Data lembur akan muncul di sini</div></div>':harian.map(h=>'<div class="bg-white border border-slate-200 rounded-[16px] overflow-hidden"><div class="px-4 py-3 flex justify-between items-center border-b border-slate-100"><div><div class="font-semibold text-[12px] text-slate-900">'+formatTanggal(h.tanggal)+'</div><div class="text-[10px] text-slate-500 mt-0.5">'+h.rows.length+' orang • '+h.rows.reduce((s,r)=>s+r.tul,0)+' TUL</div></div><button onclick="hapusTanggal(\''+h.tanggal+'\')" class="h-7 px-3 rounded-full bg-slate-50 border border-slate-200 text-[10px]">Hapus</button></div><div class="divide-y divide-slate-100">'+h.rows.map(r=>'<div class="px-4 py-2.5 flex justify-between items-center"><div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full bg-slate-50 border border-slate-200 grid place-items-center font-semibold text-[11px]">'+r.nama.charAt(0)+'</div><div><div class="font-medium text-[12px]">'+r.nama+'</div><div class="text-[10px] text-slate-500 mt-0.5">'+r.jam+'j • '+r.tul+' TUL</div></div></div><button onclick="hapusTransaksi(\''+r.tanggal+'\',\''+r.nama+'\','+r.jam+')" class="w-7 h-7 rounded-full bg-slate-50 text-slate-400">✕</button></div>').join('')+'</div></div>').join(''))+'</div>':'')+(activeTab==='rekap'?'<div class="space-y-3"><div class="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-[12px] p-3 mb-2"><div class="flex justify-between items-center"><div><div class="text-[11px] font-bold text-emerald-900">🤖 Auto Share WA</div><div class="text-[9px] text-emerald-700">Ultah & Hari Raya (H-2 s/d H+1) + Rekap Tgl 1 | Tanpa Klik: '+(isAutoTanpaKlik()?'ON ⚡':'OFF')+'</div></div><div class="flex gap-1"><button onclick="toggleAutoWA(); render();" class="h-7 px-2 rounded-full bg-white border border-emerald-200 text-[9px]">ON/OFF</button><button onclick="testAutoWA()" class="h-7 px-2 rounded-full bg-emerald-600 text-white text-[9px]">Test</button></div></div><div class="mt-2 flex gap-1"><button onclick="toggleAutoTanpaKlik()" class="flex-1 h-7 rounded-full '+(isAutoTanpaKlik()?'bg-purple-600 text-white':'bg-white border border-purple-200 text-purple-700')+' text-[9px] font-bold">⚡ Mode Tanpa Klik: '+(isAutoTanpaKlik()?'ON - Auto buka 5 detik':'OFF')+'</button></div></div><div class="bg-white border border-slate-200 rounded-[16px] p-3 flex justify-between items-center"><div class="text-[11px] font-medium text-slate-600">Rekap Bulanan</div><select id="bulanSelect" onchange="filterBulan=this.value;render()" class="h-8 rounded-full bg-slate-50 border border-slate-200 px-3 text-[12px] font-medium outline-none"><option value="all" '+(filterBulan==='all'?'selected':'')+'>Semua Bulan</option><option value="1" '+(filterBulan==='1'?'selected':'')+'>Januari</option><option value="2" '+(filterBulan==='2'?'selected':'')+'>Februari</option><option value="3" '+(filterBulan==='3'?'selected':'')+'>Maret</option><option value="4" '+(filterBulan==='4'?'selected':'')+'>April</option><option value="5" '+(filterBulan==='5'?'selected':'')+'>Mei</option><option value="6" '+(filterBulan==='6'?'selected':'')+'>Juni</option><option value="7" '+(filterBulan==='7'?'selected':'')+'>Juli</option><option value="8" '+(filterBulan==='8'?'selected':'')+'>Agustus</option><option value="9" '+(filterBulan==='9'?'selected':'')+'>September</option><option value="10" '+(filterBulan==='10'?'selected':'')+'>Oktober</option><option value="11" '+(filterBulan==='11'?'selected':'')+'>November</option><option value="12" '+(filterBulan==='12'?'selected':'')+'>Desember</option></select></div><div class="bg-white border border-slate-200 rounded-[16px] overflow-hidden divide-y divide-slate-100">'+grouped.map((g,i)=>{let rank=''; if(i===0) rank='<div class="w-8 h-8 rounded-full bg-amber-100 text-amber-700 grid place-items-center text-[12px]">1</div>'; else if(i===1) rank='<div class="w-8 h-8 rounded-full bg-slate-100 text-slate-600 grid place-items-center text-[12px]">2</div>'; else if(i===2) rank='<div class="w-8 h-8 rounded-full bg-orange-100 text-orange-700 grid place-items-center text-[12px]">3</div>'; else rank='<div class="w-8 h-8 rounded-full bg-slate-50 text-slate-600 grid place-items-center text-[10px]">'+(i+1)+'</div>'; return '<div class="px-4 py-3 flex justify-between items-center"><div class="flex items-center gap-3">'+rank+'<div><div class="font-medium text-[12px]">'+g.nama+'</div><div class="text-[10px] text-slate-500 mt-0.5">'+g.count+' hari</div></div></div><div class="font-bold text-[13px]">'+g.totalTUL+' TUL</div></div>';}).join('')+'</div></div>':'')+'</div>';
+  // Render massal list
+  if(activeTab==='input'){
+    const listEl=document.getElementById('massalList');
+    if(listEl){
+      listEl.innerHTML=DEFAULT_KARYAWAN.slice().sort((a,b)=>a.nama.localeCompare(b.nama)).map(k=>'<label class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-[10px] px-3 py-2 cursor-pointer"><input type="checkbox" value="'+k.nama+'" class="rounded"><span class="text-[12px]">'+k.nama+'</span></label>').join('');
+    }
+  }
+}
+
+if(typeof isLogin!==""){ applyTemaHariRaya(); try{ cekOtomatisShareWA(); }catch(e){} if(isLogin)fetchData();else render(); }
+</script>
+<div id="modalPesan" class="fixed inset-0 bg-black/40 hidden z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-[16px] w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
+    <div class="p-4 border-b border-slate-100 flex justify-between items-center"><h3 class="font-semibold text-[13px]">Input Plan Lembur</h3><button onclick="closePesan()" class="w-7 h-7 rounded-full bg-slate-100 grid place-items-center">✕</button></div>
+    <div class="p-4 space-y-3 overflow-auto">
+      <textarea id="txtPesan" rows="12" class="w-full border border-slate-200 rounded-[12px] px-3 py-3 text-[13px] font-mono focus:outline-none focus:border-slate-900" placeholder="Tempel pesan plan lembur..."></textarea>
+      <div id="previewPesan" class="bg-slate-50 border border-slate-200 rounded-[12px] p-3 text-[12px] hidden max-h-40 overflow-auto"></div>
+      <div class="flex gap-2"><button onclick="parsePlan()" class="flex-1 h-10 bg-white border border-slate-200 rounded-[10px] font-medium text-[12px]">Preview</button><button onclick="simpanPesan()" class="flex-1 bg-slate-900 text-white h-10 rounded-[10px] font-medium text-[12px]">Simpan</button></div>
+    </div>
+  </div>
+</div>
+<div id="modalKelolaAnggota" class="fixed inset-0 bg-black/40 hidden z-[60] flex items-center justify-center p-4">
+  <div class="bg-white rounded-[16px] w-full max-w-sm max-h-[85vh] overflow-hidden flex flex-col border border-slate-200">
+    <div class="p-4 border-b border-slate-100 flex justify-between items-center"><h3 class="font-semibold text-[13px]">Kelola Anggota</h3><button onclick="closeKelolaAnggota()" class="w-7 h-7 rounded-full bg-slate-100 grid place-items-center">✕</button></div>
+    <div class="px-4 pt-3 pb-2 bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-100 flex justify-between items-center">
+      <div><div class="text-[11px] font-bold text-emerald-900">📱 Grup WA Otomatis</div><div class="text-[9px] text-emerald-700" id="waGroupStatus">Belum set - tap Setting</div></div>
+      <button onclick="openWAGroupSetting()" class="h-7 px-3 bg-emerald-600 text-white rounded-full text-[10px] font-bold">Setting</button>
+    </div>
+    <div class="p-4 space-y-3 overflow-auto">
+      <div class="flex gap-2"><input id="inputNamaBaru" type="text" placeholder="Nama baru..." class="flex-1 h-9 rounded-[10px] border border-slate-200 px-3 text-[12px]"><button onclick="tambahAnggota()" class="h-9 px-4 rounded-[10px] bg-slate-900 text-white text-[11px] font-medium">Tambah</button></div>
+      <div id="listKelolaAnggota" class="space-y-2 max-h-[50vh] overflow-auto pr-1"></div>
+      <div class="space-y-2">
+      <div class="bg-red-50 border border-red-200 rounded-[10px] p-2">
+        <div class="text-[10px] font-bold text-red-800">🗑️ Reset Login Anggota</div>
+        <div class="text-[9px] text-red-600 mt-1">Hapus semua akun yang sudah daftar agar daftar ulang dari awal. Daftar nama karyawan tetap ada.</div>
+        <div class="flex gap-2 mt-2">
+          <button onclick="resetSemuaLoginAnggota()" class="flex-1 h-8 rounded-[8px] bg-red-600 text-white text-[10px] font-bold">Reset Login</button>
+          <button onclick="resetTotalSemua()" class="flex-1 h-8 rounded-[8px] bg-slate-900 text-white text-[10px]">Reset Total</button>
+        </div>
+      </div>
+      <div class="flex gap-2"><button onclick="if(confirm('Reset ke awal?')){ localStorage.removeItem('custom_karyawan'); DEFAULT_KARYAWAN=DEFAULT_KARYAWAN_AWAL.slice(); saveKaryawanList(DEFAULT_KARYAWAN); renderKelolaAnggota(); render(); }" class="flex-1 h-8 rounded-[10px] bg-slate-50 border border-slate-200 text-[11px]">Reset Nama</button><button onclick="closeKelolaAnggota()" class="flex-1 h-8 rounded-[10px] bg-slate-900 text-white text-[11px]">Selesai</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>(function(){var loc=location.href.replace(/#.*$/,"");var ATTR_NAMES=["data-product-id","data-productid","data-product_id","product-id","productid","product_id","data-source-entity-id","source-entity-id","source_entity_id","data-product","data-metadata","data-meta"];var DATASET_KEYS=["productId","productid","product_id","sourceEntityId","sourceentityid","source_entity_id","product","metadata","meta"];function readProductId(value){if(typeof value!=="string"||value.length===0)return null;if(/^[0-9]{6,}$/.test(value))return value;var match=value.match(/(?:product(?:_|-)?id|source(?:_|-)?entity(?:_|-)?id)["'=:\s]+([0-9]{6,})/i);return match?match[1]:null}function extractProductId(start){for(var node=start;node&&node!==document.body;node=node.parentElement){for(var i=0;i<ATTR_NAMES.length;i++){var attrValue=node.getAttribute&&node.getAttribute(ATTR_NAMES[i]);var attrProductId=readProductId(attrValue);if(attrProductId)return attrProductId}var dataset=node.dataset||null;if(dataset){for(var j=0;j<DATASET_KEYS.length;j++){var dataValue=dataset[DATASET_KEYS[j]];var dataProductId=readProductId(dataValue);if(dataProductId)return dataProductId}}}return null}function isInlineMediaSlotElement(node){return !!(node&&node.getAttribute&&node.getAttribute("data-clippy-inline-media-slot")!==null)}function findInlineMediaSlot(start){for(var node=start;node&&node!==document.body;node=node.parentElement){if(isInlineMediaSlotElement(node))return node}return null}function readInlineMediaUrl(node){if(!node)return null;return node.getAttribute&&((node.getAttribute("data-clippy-inline-media-url")||node.getAttribute("data-url")||node.getAttribute("data_url")))||node.href||null}function stripHash(url){return String(url).replace(/#.*$/,"")}function urlsMatch(a,b){if(!a||!b)return false;try{return stripHash(new URL(a,loc).href)===stripHash(new URL(b,loc).href)}catch(_){return stripHash(a)===stripHash(b)}}function isFirstPartyReelUrl(value){try{var url=new URL(value,loc);if(url.protocol!=="https:")return false;var host=url.hostname.toLowerCase();var supported=host==="instagram.com"||host.endsWith(".instagram.com")||host==="facebook.com"||host.endsWith(".facebook.com");return supported&&/\/reels?\//i.test(url.pathname)}catch(_){return false}}function isInlineMediaUrlClick(node,href){var slot=findInlineMediaSlot(node);if(!slot)return false;var slotUrl=readInlineMediaUrl(slot);if(slotUrl)return urlsMatch(href,slotUrl);return isFirstPartyReelUrl(href)}function findDataHref(start){for(var node=start;node&&node!==document.body;node=node.parentElement){if(node.getAttribute){var href=node.getAttribute("data-href")||node.getAttribute("data-url");if(href)return{href:href,node:node}}}return null}var nativeOpen=window.open;window.open=function(url){if(parent!==window&&typeof url==="string"&&/^https?:\/\//.test(url)){parent.postMessage({type:"ecto:usercontent-link-click",href:url},"*");return null}return nativeOpen?nativeOpen.apply(window,arguments):null};document.addEventListener("click",function(e){var target=e.target instanceof Element?e.target:null;if(!target)return;if(parent===window)return;var a=target.closest?target.closest("a[href]"):null;if(a&&a.href&&/^https?:\/\//.test(a.href)&&a.href.replace(/#.*$/,"")!==loc){if(isInlineMediaUrlClick(a,a.href))return;var productId=extractProductId(target)||extractProductId(a);if(productId){e.preventDefault();parent.postMessage({type:"ecto-artifact-link-click",productId:productId},"*");return}e.preventDefault();parent.postMessage({type:"ecto:usercontent-link-click",href:a.href},"*");return}var dataHref=findDataHref(target);if(dataHref&&/^https?:\/\//.test(dataHref.href)&&dataHref.href.replace(/#.*$/,"")!==loc){if(isInlineMediaUrlClick(dataHref.node,dataHref.href))return;e.preventDefault();parent.postMessage({type:"ecto:usercontent-link-click",href:dataHref.href},"*")}},true)})();</script><script>(function(){var FOCUS_TYPE="ecto:artifact-focus-request";var CLOSE_TYPE="ecto:artifact-close-request";function focusArtifactDocument(){var body=document.body;if(!body)return;try{window.focus();}catch(e){}if(!body.hasAttribute("tabindex"))body.setAttribute("tabindex","-1");try{body.focus({preventScroll:true});}catch(e){try{body.focus();}catch(e2){}}}window.addEventListener("message",function(event){if(event.source!==window.parent)return;var data=event.data;if(!data||typeof data!=="object"||data.type!==FOCUS_TYPE)return;if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",focusArtifactDocument,{once:true});return;}focusArtifactDocument();});window.addEventListener("keydown",function(event){if(event.key!=="Escape")return;window.setTimeout(function(){if(event.defaultPrevented)return;window.parent.postMessage({type:CLOSE_TYPE},"*");},0);});})();</script></body></html>
