@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="id"><head><style>
+@font-face {
+  font-family: "Optimistic";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("/fonts/OptimisticAI_VF_Optimized.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Optimistic Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/OptimisticMono_W_TextRegular.woff2") format("woff2");
+}
+:where(html) {
+  font-family: "Optimistic", system-ui, sans-serif;
+}
+:where(code, pre, kbd, samp) {
+  font-family: "Optimistic Mono", ui-monospace, monospace;
+}
+</style><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>AREA EF - Admin</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{font-family:Inter,sans-serif;background:#f8fafc;min-height:100vh;}</style>
+</head><body>
+<div id="app"></div>
+<script>
+const DEFAULT_SYNC_URL='https://script.google.com/macros/s/AKfycbwr3utIlkimCQcJln2Gug7D0XOypnazzboyFiv5oZFFOf_Hk_XGyhKm9G2sx0Su1LU/exec';
+function getSyncUrl(){ try{ const c=localStorage.getItem('custom_sync_url'); if(c && c.startsWith('http')) return c; }catch(e){} return DEFAULT_SYNC_URL; }
+function setSyncUrl(url){ try{ localStorage.setItem('custom_sync_url', url); return true; }catch(e){ return false; } }
+const ADMIN_PASS_DEFAULT='admin123';
+function getAdminPass(){ try{ const c=localStorage.getItem('custom_admin_pass'); if(c) return c; }catch(e){} return ADMIN_PASS_DEFAULT; }
+const TUL_MAP={2:3.5,3:5.5,4:7.5,6:12,7:14,8:17};
+function calcTUL(j){ j=Number(j); if(isNaN(j)||j<=0||j>24) return 0; return TUL_MAP[j]||j*1.5; }
+function normalizeTanggal(t){if(!t)return'';let s=String(t).trim();if(s.includes('T'))s=s.split('T')[0];try{const d=new Date(t);if(!isNaN(d))return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}catch{}return s;}
+function formatTanggal(t){const p=normalizeTanggal(t).split('-');if(p.length===3)return p[2]+'-'+p[1]+'-'+p[0];return t;}
+const DEFAULT_KARYAWAN_AWAL=[{nama:'Aaf'},{nama:'Aditya'},{nama:'Anah'},{nama:'Anisa'},{nama:'Arief'},{nama:'Budi'},{nama:'Dozen'},{nama:'Eka'},{nama:'Nely'},{nama:'Nia'},{nama:'Putri'},{nama:'Supriyadi'},{nama:'Syarif'},{nama:'Topik'},{nama:'Yudi'},{nama:'Zaelani'}];
+const ALIAS_MAP={'kuncoro budi':'Budi','budi kuncoro':'Budi','kuncoro':'Budi','neli':'Nely','nely':'Nely','annisa':'Anisa'};
+function toCanonical(n){let low=String(n||'').trim().toLowerCase(); if(ALIAS_MAP[low]) return ALIAS_MAP[low]; if(low.includes('kuncoro')) return 'Budi'; for(let c of DEFAULT_KARYAWAN_AWAL){ if(low===c.nama.toLowerCase()) return c.nama; } return n; }
+function getKaryawanList(){
+  try{
+    const c=localStorage.getItem('custom_karyawan');
+    if(c){
+      let arr=JSON.parse(c);
+      if(Array.isArray(arr)&&arr.length>0){
+        let map={}; DEFAULT_KARYAWAN_AWAL.forEach(k=>{ map[k.nama.toLowerCase()]={nama:k.nama, tglLahir:''}; });
+        arr.forEach(item=>{
+          let raw=(item.nama||'').trim(); if(!raw) return;
+          let can=toCanonical(raw); let key=can.toLowerCase();
+          if(!map[key]) map[key]={nama:can, tglLahir:item.tglLahir||''};
+          else { if(item.tglLahir && !map[key].tglLahir) map[key].tglLahir=item.tglLahir; map[key].nama=can; }
+        });
+        let res=Object.values(map).sort((a,b)=>a.nama.localeCompare(b.nama));
+        localStorage.setItem('custom_karyawan', JSON.stringify(res));
+        return res;
+      }
+    }
+  }catch(e){}
+  return DEFAULT_KARYAWAN_AWAL.slice().sort((a,b)=>a.nama.localeCompare(b.nama));
+}
+function saveKaryawanList(list){ try{ localStorage.setItem('custom_karyawan', JSON.stringify(list.slice().sort((a,b)=>a.nama.localeCompare(b.nama)))); }catch{} }
+function getCustomMemberPass(){ try{ return JSON.parse(localStorage.getItem('custom_member_pass')||'{}'); }catch{ return {}; } }
+
+const HARI_BESAR=[
+  {tgl:'01-01', nama:'Tahun Baru'},
+  {tgl:'21-04', nama:'Hari Kartini'},
+  {tgl:'01-05', nama:'Hari Buruh'},
+  {tgl:'17-08', nama:'HUT RI'},
+  {tgl:'25-12', nama:'Hari Natal'},
+  {tgl:'31-12', nama:'Tahun Baru'},
+  {tgl:'10-04', nama:'Hari Raya Idul Fitri'},
+  {tgl:'11-04', nama:'Hari Raya Idul Fitri'},
+  {tgl:'16-06', nama:'Hari Raya Idul Adha'},
+];
+function cekHariBesar(){
+  const d=new Date(); const key=String(d.getDate()).padStart(2,'0')+'-'+String(d.getMonth()+1).padStart(2,'0');
+  return HARI_BESAR.find(h=>h.tgl===key)||null;
+}
+function cekUltahHariIni(){
+  try{
+    const list=getKaryawanList();
+    const d=new Date(); const key=String(d.getDate()).padStart(2,'0')+'-'+String(d.getMonth()+1).padStart(2,'0');
+    let res=[];
+    list.forEach(k=>{
+      if(!k.tglLahir) return;
+      let p=k.tglLahir.split('-'); if(p.length!==3) return;
+      let dm=p[0]+'-'+p[1];
+      if(dm===key) res.push(k);
+    });
+    return res;
+  }catch(e){ return []; }
+}
+function bannerHtml(){
+  let hb=cekHariBesar(); let ult=cekUltahHariIni();
+  let html='';
+  if(hb){ html+=`<div class="bg-gradient-to-r from-amber-400 to-orange-500 text-white rounded-[12px] p-3 text-[11px] font-bold flex items-center gap-2">🎉 ${hb.nama} Hari Ini!</div>`; }
+  if(ult.length>0){ html+=`<div class="bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-[12px] p-3 text-[11px] font-bold flex items-center gap-2">🎂 Ultah: ${ult.map(u=>u.nama).join(', ')} - Selamat Ulang Tahun!</div>`; }
+  return html;
+}
+
+let allData=[]; let isLogin=false;
+function toast(m){try{const t=document.createElement('div');t.className='fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-4 py-2 rounded-full text-[12px] z-50';t.innerText=m;document.body.appendChild(t);setTimeout(()=>t.remove(),2000);}catch{}}
+function jsonp(url){return new Promise((resolve,reject)=>{try{const cb='cb_'+Date.now()+Math.floor(Math.random()*1000); window[cb]=(d)=>{ delete window[cb]; document.getElementById(cb)?.remove(); resolve(d); }; const s=document.createElement('script'); s.id=cb; s.src=url+(url.includes('?')?'&':'?')+'callback='+cb+'&_='+Date.now(); s.onerror=()=>{ delete window[cb]; s.remove(); reject(new Error('offline')); }; document.body.appendChild(s); setTimeout(()=>{ try{delete window[cb]; document.getElementById(cb)?.remove();}catch{} reject(new Error('timeout')); }, 8000);}catch(e){reject(e);}});}
+async function fetchData(){
+  try{
+    const j=await jsonp(getSyncUrl()+'?action=read');
+    if(Array.isArray(j)){
+      allData=j.map(r=>({tanggal:r.tanggal,tanggalNorm:normalizeTanggal(r.tanggal),nama:r.nama||r.nik,jam:Number(r.jam||0),tul:calcTUL(Number(r.jam||0))})).filter(x=>x.nama);
+      try{ localStorage.setItem('cache_lembur', JSON.stringify(allData)); }catch{}
+    }
+  }catch(e){ try{const c=localStorage.getItem('cache_lembur'); if(c){ allData=JSON.parse(c);} }catch{} }
+  render();
+}
+function loginAdmin(){ const p=(document.getElementById('adminPass').value||'').trim(); if(p===getAdminPass()){ isLogin=true; fetchData(); } else { document.getElementById('adminErr').innerText='Password salah'; } }
+function simpanSyncUrl(){
+  const inp=document.getElementById('inputSyncUrl'); let url=(inp.value||'').trim();
+  if(!url.startsWith('http') || !url.includes('/exec')){ toast('URL tidak valid'); return; }
+  setSyncUrl(url); toast('URL disimpan'); fetchData();
+}
+async function testSyncUrl(){
+  try{
+    const j=await jsonp(getSyncUrl()+'?action=ping&v='+Date.now());
+    if(j && j.status==='OK'){ toast('Koneksi OK'); } else { toast('Terhubung'); }
+  }catch(e){ toast('Koneksi gagal'); }
+}
+function render(){
+  if(!isLogin){
+    document.getElementById('app').innerHTML=`<div class="min-h-screen grid place-items-center p-4"><div class="bg-white rounded-[20px] p-6 w-full max-w-sm border shadow-sm"><div class="text-center mb-4"><div class="w-10 h-10 rounded-full bg-slate-900 mx-auto grid place-items-center text-white font-bold">EF</div><div class="font-bold mt-3">Admin</div></div><input id="adminPass" type="password" placeholder="Password" class="w-full h-11 rounded-[10px] border px-3 text-[13px] mb-3"><div id="adminErr" class="text-[11px] text-red-500 mb-2"></div><button onclick="loginAdmin()" class="w-full h-11 rounded-[10px] bg-slate-900 text-white font-semibold text-[13px]">Masuk</button></div></div>`;
+    return;
+  }
+  const totalTUL=allData.reduce((s,r)=>s+Number(r.tul||0),0);
+  setTimeout(()=>{ try{ const b=document.getElementById("bannerArea"); if(b) b.innerHTML=bannerHtml(); }catch(e){} }, 100);
+  const curUrl=getSyncUrl();
+  document.getElementById('app').innerHTML=`
+    <div class="sticky top-0 z-20 px-4 py-3 flex justify-between items-center text-white" style="background:#0e7490"><div><div class="font-bold text-[14px]">AREA EF</div><div class="text-[10px] opacity-80">${totalTUL} TUL • ${allData.length} data</div></div><div class="flex gap-2"><button onclick="openKelolaAnggota()" class="h-8 px-3 rounded-full bg-white text-slate-900 text-[11px] font-medium">Anggota</button><button onclick="isLogin=false; render();" class="h-8 px-3 rounded-full bg-black text-white text-[11px]">Keluar</button></div></div>
+    <div class="p-3 space-y-3 max-w-md mx-auto">
+      <div id="bannerArea" class="space-y-2"></div>
+      <div class="bg-white border rounded-[14px] p-3">
+        <div class="font-bold text-[12px]">Pengaturan URL</div>
+        <div class="mt-2 flex gap-2">
+          <input id="inputSyncUrl" type="text" value="${curUrl}" class="flex-1 h-9 rounded-[8px] border px-3 text-[11px] bg-slate-50">
+          <button onclick="simpanSyncUrl()" class="h-9 px-4 rounded-[8px] bg-slate-900 text-white text-[11px] font-bold">Simpan</button>
+        </div>
+        <div class="flex gap-2 mt-2">
+          <button onclick="testSyncUrl()" class="flex-1 h-8 rounded-full bg-emerald-600 text-white text-[10px] font-bold">Test</button>
+          <button onclick="if(confirm('Reset URL?')){ localStorage.removeItem('custom_sync_url'); document.getElementById('inputSyncUrl').value=getSyncUrl(); toast('Reset'); fetchData(); }" class="h-8 px-3 rounded-full bg-slate-100 border text-[10px]">Reset</button>
+        </div>
+      </div>
+      <div class="bg-white border rounded-[14px] p-3"><div class="font-medium text-[12px]">Data Lembur</div><div class="text-[11px] text-slate-500 mt-1">${allData.length} data tersimpan</div></div>
+    </div>
+  `;
+}
+function openKelolaAnggota(){ document.getElementById('modalKelolaAnggota').classList.remove('hidden'); renderKelolaAnggota(); }
+function closeKelolaAnggota(){ document.getElementById('modalKelolaAnggota').classList.add('hidden'); }
+function tambahAnggota(){ const inp=document.getElementById('inputNamaBaru'); const nama=(inp.value||'').trim(); if(!nama) return; if(!/^[A-Za-z ]{2,30}$/.test(nama)){ toast('Nama tidak valid'); return; } const cur=getKaryawanList(); if(cur.some(k=>k.nama.toLowerCase()===nama.toLowerCase())){ toast('Sudah ada'); return; } const baru=[...cur,{nama:toCanonical(nama)}]; saveKaryawanList(baru); inp.value=''; renderKelolaAnggota(); toast('Ditambah'); }
+function hapusAnggota(nama){
+  if(!confirm('Hapus '+nama+'?')) return;
+  try{
+    const cur=getKaryawanList().filter(k=>k.nama!==nama); saveKaryawanList(cur);
+    try{ let passMap=getCustomMemberPass(); let tglMap={}; try{ tglMap=JSON.parse(localStorage.getItem('custom_member_tgl')||'{}'); }catch{} delete passMap[nama]; delete passMap[nama.toLowerCase()]; delete tglMap[nama]; delete tglMap[nama.toLowerCase()]; localStorage.setItem('custom_member_pass', JSON.stringify(passMap)); localStorage.setItem('custom_member_tgl', JSON.stringify(tglMap)); }catch(e){}
+    renderKelolaAnggota(); toast(nama+' dihapus');
+    try{ const url = getSyncUrl() + '?action=deleteMember&nama=' + encodeURIComponent(nama) + '&v=' + Date.now(); const img = new Image(); img.src = url; }catch(e){}
+  }catch(e){}
+}
+function hapusSemuaAnggotaTerdaftar(){
+  if(!confirm('Hapus semua login?')) return;
+  try{
+    localStorage.removeItem('custom_member_pass'); localStorage.removeItem('custom_member_tgl'); localStorage.removeItem('has_registered'); localStorage.removeItem('member_name'); localStorage.removeItem('member_login');
+    let cur=getKaryawanList(); cur.forEach(k=>{ k.tglLahir=''; }); saveKaryawanList(cur);
+    renderKelolaAnggota(); toast('Semua login dihapus');
+    try{ const url = getSyncUrl() + '?action=deleteAllMembers&v=' + Date.now(); const img = new Image(); img.src = url; }catch(e){}
+  }catch(e){}
+}
+async function fetchMembersFromServer(){
+  try{
+    const data=await jsonp(getSyncUrl()+'?action=readMembers&v='+Date.now());
+    if(Array.isArray(data)){
+      let serverNames = data.map(m=>toCanonical(m.nama||m.name||'').toLowerCase()).filter(Boolean);
+      let cur=getKaryawanList(); let changed=false;
+      data.forEach(m=>{
+        const nama=m.nama||m.name; const tgl=m.tgl||m.tglLahir; if(!nama) return;
+        const can=toCanonical(nama); let found=cur.find(k=>k.nama.toLowerCase()===can.toLowerCase());
+        if(found && tgl && !found.tglLahir){ found.tglLahir=tgl; changed=true; } else if(!found){ cur.push({nama:can, tglLahir:tgl||''}); changed=true; }
+      });
+      const defaultNames = DEFAULT_KARYAWAN_AWAL.map(k=>k.nama.toLowerCase());
+      let filtered = cur.filter(k=>{ const low=k.nama.toLowerCase(); if(defaultNames.includes(low)) return true; if(serverNames.includes(low)) return true; return false; });
+      if(filtered.length !== cur.length){ cur=filtered; changed=true; }
+      if(changed){ saveKaryawanList(cur); renderKelolaAnggota(); toast('Sinkron selesai'); } else toast('Tidak ada perubahan');
+    }
+  }catch(e){ toast('Sinkron gagal'); }
+}
+function renderKelolaAnggota(){
+  const listEl=document.getElementById('listKelolaAnggota'); if(!listEl) return;
+  const cur=getKaryawanList().slice().sort((a,b)=>a.nama.localeCompare(b.nama));
+  const passMap=getCustomMemberPass();
+  listEl.innerHTML=`
+    <div class="flex gap-2 mb-2"><button onclick="fetchMembersFromServer()" class="flex-1 h-8 rounded-full bg-emerald-600 text-white text-[10px] font-bold">Sinkron</button><button onclick="renderKelolaAnggota()" class="h-8 px-3 rounded-full bg-slate-100 border text-[10px]">Refresh</button></div>
+    <div class="bg-slate-50 border rounded-[12px] p-3 mb-3"><div class="grid grid-cols-3 gap-2 text-center"><div class="bg-white rounded-lg p-2 border"><div class="font-bold text-[14px]">${cur.length}</div><div class="text-[9px] text-slate-500">TOTAL</div></div><div class="bg-white rounded-lg p-2 border"><div class="font-bold text-[14px] text-emerald-600">${cur.filter(k=>k.tglLahir||passMap[k.nama]).length}</div><div class="text-[9px] text-slate-500">AKTIF</div></div><div class="bg-white rounded-lg p-2 border"><div class="font-bold text-[14px]">${cur.length-cur.filter(k=>k.tglLahir||passMap[k.nama]).length}</div><div class="text-[9px] text-slate-500">BELUM</div></div></div></div>
+  `+cur.map(k=>{
+    const isDaftar=!!(k.tglLahir||passMap[k.nama]);
+    return `<div class="flex justify-between items-center bg-white border rounded-[12px] px-3 py-2.5"><div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full bg-slate-50 border grid place-items-center font-semibold text-[11px]">${k.nama.charAt(0)}</div><div><div class="font-medium text-[12px]">${k.nama}</div><div class="text-[10px] text-slate-500">${k.tglLahir||'-'}</div></div></div><button onclick="hapusAnggota('${k.nama}')" class="w-7 h-7 rounded-full bg-slate-50 border grid place-items-center">✕</button></div>`;
+  }).join('');
+}
+render();
+</script>
+<div id="modalKelolaAnggota" class="fixed inset-0 bg-black/40 hidden z-[60] flex items-center justify-center p-4">
+  <div class="bg-white rounded-[16px] w-full max-w-sm max-h-[85vh] overflow-hidden flex flex-col border">
+    <div class="p-4 border-b flex justify-between items-center"><h3 class="font-semibold text-[13px]">Anggota</h3><button onclick="closeKelolaAnggota()" class="w-7 h-7 rounded-full bg-slate-100 grid place-items-center">✕</button></div>
+    <div class="p-4 space-y-3 overflow-auto">
+      <div class="flex gap-2"><input id="inputNamaBaru" type="text" placeholder="Nama baru" class="flex-1 h-9 rounded-[10px] border px-3 text-[12px]"><button onclick="tambahAnggota()" class="h-9 px-4 rounded-[10px] bg-slate-900 text-white text-[11px]">Tambah</button></div>
+      <div id="listKelolaAnggota" class="space-y-2 max-h-[50vh] overflow-auto pr-1"></div>
+      <div class="flex gap-2"><button onclick="hapusSemuaAnggotaTerdaftar()" class="flex-1 h-8 rounded-full bg-red-600 text-white text-[10px] font-bold">Hapus Semua Login</button><button onclick="if(confirm('Reset?')){ localStorage.removeItem('custom_karyawan'); saveKaryawanList(DEFAULT_KARYAWAN_AWAL); renderKelolaAnggota(); }" class="flex-1 h-8 rounded-full bg-slate-100 border text-[10px]">Reset</button></div>
+      <button onclick="closeKelolaAnggota()" class="w-full h-9 rounded-[10px] bg-slate-900 text-white text-[11px] font-bold">Selesai</button>
+    </div>
+  </div>
+</div>
+<script>(function(){var loc=location.href.replace(/#.*$/,"");var ATTR_NAMES=["data-product-id","data-productid","data-product_id","product-id","productid","product_id","data-source-entity-id","source-entity-id","source_entity_id","data-product","data-metadata","data-meta"];var DATASET_KEYS=["productId","productid","product_id","sourceEntityId","sourceentityid","source_entity_id","product","metadata","meta"];function readProductId(value){if(typeof value!=="string"||value.length===0)return null;if(/^[0-9]{6,}$/.test(value))return value;var match=value.match(/(?:product(?:_|-)?id|source(?:_|-)?entity(?:_|-)?id)["'=:\s]+([0-9]{6,})/i);return match?match[1]:null}function extractProductId(start){for(var node=start;node&&node!==document.body;node=node.parentElement){for(var i=0;i<ATTR_NAMES.length;i++){var attrValue=node.getAttribute&&node.getAttribute(ATTR_NAMES[i]);var attrProductId=readProductId(attrValue);if(attrProductId)return attrProductId}var dataset=node.dataset||null;if(dataset){for(var j=0;j<DATASET_KEYS.length;j++){var dataValue=dataset[DATASET_KEYS[j]];var dataProductId=readProductId(dataValue);if(dataProductId)return dataProductId}}}return null}function isInlineMediaSlotElement(node){return !!(node&&node.getAttribute&&node.getAttribute("data-clippy-inline-media-slot")!==null)}function findInlineMediaSlot(start){for(var node=start;node&&node!==document.body;node=node.parentElement){if(isInlineMediaSlotElement(node))return node}return null}function readInlineMediaUrl(node){if(!node)return null;return node.getAttribute&&((node.getAttribute("data-clippy-inline-media-url")||node.getAttribute("data-url")||node.getAttribute("data_url")))||node.href||null}function stripHash(url){return String(url).replace(/#.*$/,"")}function urlsMatch(a,b){if(!a||!b)return false;try{return stripHash(new URL(a,loc).href)===stripHash(new URL(b,loc).href)}catch(_){return stripHash(a)===stripHash(b)}}function isFirstPartyReelUrl(value){try{var url=new URL(value,loc);if(url.protocol!=="https:")return false;var host=url.hostname.toLowerCase();var supported=host==="instagram.com"||host.endsWith(".instagram.com")||host==="facebook.com"||host.endsWith(".facebook.com");return supported&&/\/reels?\//i.test(url.pathname)}catch(_){return false}}function isInlineMediaUrlClick(node,href){var slot=findInlineMediaSlot(node);if(!slot)return false;var slotUrl=readInlineMediaUrl(slot);if(slotUrl)return urlsMatch(href,slotUrl);return isFirstPartyReelUrl(href)}function findDataHref(start){for(var node=start;node&&node!==document.body;node=node.parentElement){if(node.getAttribute){var href=node.getAttribute("data-href")||node.getAttribute("data-url");if(href)return{href:href,node:node}}}return null}var nativeOpen=window.open;window.open=function(url){if(parent!==window&&typeof url==="string"&&/^https?:\/\//.test(url)){parent.postMessage({type:"ecto:usercontent-link-click",href:url},"*");return null}return nativeOpen?nativeOpen.apply(window,arguments):null};document.addEventListener("click",function(e){var target=e.target instanceof Element?e.target:null;if(!target)return;if(parent===window)return;var a=target.closest?target.closest("a[href]"):null;if(a&&a.href&&/^https?:\/\//.test(a.href)&&a.href.replace(/#.*$/,"")!==loc){if(isInlineMediaUrlClick(a,a.href))return;var productId=extractProductId(target)||extractProductId(a);if(productId){e.preventDefault();parent.postMessage({type:"ecto-artifact-link-click",productId:productId},"*");return}e.preventDefault();parent.postMessage({type:"ecto:usercontent-link-click",href:a.href},"*");return}var dataHref=findDataHref(target);if(dataHref&&/^https?:\/\//.test(dataHref.href)&&dataHref.href.replace(/#.*$/,"")!==loc){if(isInlineMediaUrlClick(dataHref.node,dataHref.href))return;e.preventDefault();parent.postMessage({type:"ecto:usercontent-link-click",href:dataHref.href},"*")}},true)})();</script><script>(function(){var FOCUS_TYPE="ecto:artifact-focus-request";var CLOSE_TYPE="ecto:artifact-close-request";function focusArtifactDocument(){var body=document.body;if(!body)return;try{window.focus();}catch(e){}if(!body.hasAttribute("tabindex"))body.setAttribute("tabindex","-1");try{body.focus({preventScroll:true});}catch(e){try{body.focus();}catch(e2){}}}window.addEventListener("message",function(event){if(event.source!==window.parent)return;var data=event.data;if(!data||typeof data!=="object"||data.type!==FOCUS_TYPE)return;if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",focusArtifactDocument,{once:true});return;}focusArtifactDocument();});window.addEventListener("keydown",function(event){if(event.key!=="Escape")return;window.setTimeout(function(){if(event.defaultPrevented)return;window.parent.postMessage({type:CLOSE_TYPE},"*");},0);});})();</script></body></html>
