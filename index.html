@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="id"><head><style>
+@font-face {
+  font-family: "Optimistic";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("/fonts/OptimisticAI_VF_Optimized.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Optimistic Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/OptimisticMono_W_TextRegular.woff2") format("woff2");
+}
+:where(html) {
+  font-family: "Optimistic", system-ui, sans-serif;
+}
+:where(code, pre, kbd, samp) {
+  font-family: "Optimistic Mono", ui-monospace, monospace;
+}
+</style><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AREA EF - ADMIN</title>
+<style>
+html,body{margin:0;padding:0;background:#ffffff;color:#111;font-family:system-ui,sans-serif}
+.h{background:#0e7490;color:#fff;padding:12px 14px;display:flex;justify-content:space-between;align-items:center}
+.h b{font-size:13px;letter-spacing:.1em}
+.b{background:#fff;border-bottom:1px solid #e5e7eb;padding:8px 10px;display:flex;gap:6px;flex-wrap:wrap}
+.btn{height:28px;padding:0 12px;border-radius:20px;border:1px solid #d1d5db;background:#fff;font-size:11px;font-weight:600}
+.btn-black{background:#111;color:#fff;border-color:#111}
+.sel,.inp{height:28px;border-radius:20px;border:1px solid #d1d5db;padding:0 10px;background:#f9fafb;font-size:12px}
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:10px;margin:8px;overflow:hidden}
+.card-h{padding:10px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #f3f4f6}
+.row{display:flex;justify-content:space-between;padding:8px 12px;border-top:1px solid #f9fafb;font-size:13px}
+.rekap{margin:8px;padding:10px;border:1px solid #e5e7eb;border-radius:10px;background:#fff}
+.empty{padding:30px;text-align:center;color:#888;font-size:12px}
+.ta{width:100%;min-height:120px;border:1px solid #d1d5db;border-radius:10px;padding:8px;font-family:monospace;font-size:12px;background:#f9fafb}
+.login{height:100vh;display:flex;align-items:center;justify-content:center;background:#fff}
+.box{width:90%;max-width:300px}
+</style></head><body>
+<div id="app"><div class="empty">Loading...</div></div>
+<script>
+var URL='https://script.google.com/macros/s/AKfycbz-Tgif9wJD6PAidITjE3-55BInA4pHZAibDI3mAIYUp_6DQV8may5oJkwyY0nHx4qE/exec';
+var TUL={1:1.5,2:3.5,3:5.5,4:7.5,6:12,7:14,8:17};
+var all=[],filter=localStorage.getItem('fb')||String(new Date().getMonth()+1),members=[],parsed=[],showWA=false,showM=false,login=!!localStorage.getItem('admin_login'),showN=6;
+function j(u){return new Promise(function(r,er){var c='cb'+Date.now()+Math.random().toString(36).slice(2);window[c]=function(d){delete window[c];var s=document.getElementById(c);if(s) s.remove();r(d);};var s=document.createElement('script');s.id=c;s.src=u+'&callback='+c+'&_='+Date.now();s.onerror=function(){delete window[c];s.remove();er(new Error('load'));};document.body.appendChild(s);});}
+function norm(t){var s=String(t).trim();if(s.indexOf('T')>=0) s=s.split('T')[0];var m=s.match(/(\d{4})-(\d{2})-(\d{2})/);if(m) return m[1]+'-'+m[2]+'-'+m[3];m=s.match(/(\d{1,2})[\-\/](\d{1,2})[\-\/](\d{4})/);if(m) return m[3]+'-'+('0'+m[2]).slice(-2)+'-'+('0'+m[1]).slice(-2);return s;}
+function fmt(t){var p=norm(t).split('-');return p.length==3?p[2]+'-'+p[1]+'-'+p[0]:t;}
+function toDD(t){var m=t.match(/(\d{4})-(\d{2})-(\d{2})/);if(m) return m[3]+'-'+m[2]+'-'+m[1];return t;}
+function calc(j){return TUL[j]||j*1.5;}
+function load(){
+ if(!login){render();return;}
+ // INSTANT UI - render skeleton langsung, tidak tunggu server
+ render();
+ // coba cache dulu biar langsung ada data
+ try{
+  var cached=localStorage.getItem('ef_cache_'+filter);
+  if(cached){ all=JSON.parse(cached).map(function(x){return{tanggal:norm(x.tanggal),nama:x.nama,jam:x.jam,tul:calc(x.jam)}}); render(); }
+ }catch(e){}
+ // fetch di belakang, dengan timeout 8 detik
+ var fetched=false;
+ var timer=setTimeout(function(){ if(!fetched){ var el=document.getElementById('status'); if(el) el.innerHTML='Memuat data bulan '+filter+'... (Google lagi cold start)'; } }, 800);
+ j(URL+'?action=read&bulan='+filter).then(function(d){ fetched=true; clearTimeout(timer);
+  if(!Array.isArray(d)) d=[];
+  all=d.map(function(x){var jn=Number(x.jam||0);if([1,2,3,4,6,7,8].indexOf(jn)<0) return null;return{tanggal:norm(x.tanggal),nama:String(x.nama||'').trim(),jam:jn,tul:calc(jn)}}).filter(Boolean);
+  try{ localStorage.setItem('ef_cache_'+filter, JSON.stringify(all)); }catch(e){}
+  render();
+ }).catch(function(){render();});
+}
+function loadCachedInstant(){
+ try{
+  var cached=localStorage.getItem('ef_cache_'+filter);
+  if(cached){ all=JSON.parse(cached); return true; }
+ }catch(e){}
+ return false;
+}
+
+function loadMembers(){return j(URL+'?action=listmembers').then(function(m){members=(m&&m.members)||[];}).catch(function(){members=[];});}
+function getFiltered(){if(filter=='all') return all;var mn=Number(filter);return all.filter(function(r){return Number(norm(r.tanggal).split('-')[1])==mn;});}
+function groupByDate(d){var o={};d.forEach(function(r){if(!o[r.tanggal]) o[r.tanggal]=[];o[r.tanggal].push(r);});return Object.keys(o).sort(function(a,b){return new Date(b)-new Date(a);}).map(function(k){return{tanggal:k,rows:o[k]});}
+function getRekap(d){var o={};d.forEach(function(r){if(!o[r.nama]) o[r.nama]={nama:r.nama,c:0,tot:0};o[r.nama].c++;o[r.nama].tot+=r.tul;});return Object.keys(o).map(function(k){return o[k];}).sort(function(a,b){return b.tot-a.tot;});}
+function parseLine(s){
+ var t=s.trim();if(!t) return null;
+ var l=t.toLowerCase();
+ if(l.indexOf('ot ')===0||l.indexOf('selasa')===0||l.indexOf('senin')===0||l.indexOf('rabu')===0||l.indexOf('kamis')===0||l.indexOf('jumat')===0||l.indexOf('sabtu')===0||l.indexOf('minggu')===0||l=='reg'||l.indexOf('reg ')===0||l.indexOf('plan')===0) return null;
+ var jam=null,m;
+ m=t.match(/(\d+)\s*mp/i);if(m) jam=Number(m[1]);else{m=t.match(/-\s*(\d+)\b/);if(m) jam=Number(m[1]);else{m=t.match(/(\d+)\s*j/i);if(m) jam=Number(m[1]);}}
+ if(!jam||jam<=0||jam>8) return null;
+ var ws=t.split(/\s+/);var nama=null;
+ for(var i=ws.length-1;i>=0;i--){
+  var w=ws[i].replace(/[^A-Za-z]/g,'');
+  if(w.length>=3 && !/^[A-Z]+\d+$/i.test(w) && !/^(mp|assy|mask|insulator|avi|cek|street|wip|ret|odom)$/i.test(w.toLowerCase())){nama=w;break;}
+ }
+ if(!nama) return null;
+ if(/^[A-Z]\d+$/i.test(nama)) return null;
+ return{nama:nama,jam:jam};
+}
+function doParseWA(){
+ var txt=document.getElementById('wa');if(!txt){alert('Textarea tidak ketemu');return;}
+ var v=txt.value||'';if(!v.trim()){alert('Paste dulu');return;}
+ var lines=v.split('\n');var tgl='';
+ for(var i=0;i<lines.length;i++){
+  var ln=lines[i];
+  var m=ln.match(/(\d{1,2})\s*(januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember|jan|feb|mar|apr|jun|jul|agu|sep|okt|nov|des)\s*(\d{4})/i);
+  if(m){var map={januari:'01',februari:'02',maret:'03',april:'04',mei:'05',juni:'06',juli:'07',agustus:'08',september:'09',oktober:'10',november:'11',desember:'12',jan:'01',feb:'02',mar:'03',apr:'04',jun:'06',jul:'07',agu:'08',sep:'09',okt:'10',nov:'11',des:'12'};tgl=('0'+m[1]).slice(-2)+'-'+(map[m[2].toLowerCase()]||'10')+'-'+m[3];break;}
+  var m2=ln.match(/(\d{1,2})[\-\/\.](\d{1,2})[\-\/\.](\d{2,4})/);
+  if(m2&&!tgl){var d=('0'+m2[1]).slice(-2),mo=('0'+m2[2]).slice(-2),y=m2[3];if(y.length==2) y=(Number(y)<=30?'20'+y:'19'+y);tgl=d+'-'+mo+'-'+y;}
+ }
+ var inp=document.getElementById('tgl');if(inp&&inp.value) tgl=toDD(inp.value);
+ if(!tgl){alert('Tanggal tidak ketemu. Pilih tanggal di atas');return;}
+ parsed=[];
+ for(var i=0;i<lines.length;i++){var p=parseLine(lines[i]);if(p){p.tanggal=tgl;parsed.push(p);}}
+ var pv=document.getElementById('pv');
+ if(!parsed.length){pv.innerHTML='<div style=color:red;font-size:11px>Tidak ada nama. Contoh: E10 1mp Arief, F13 -1 Dozen, E13 -1 Syarif</div>';return;}
+ var h='<div style=font-size:11px><b>'+parsed.length+' data - '+tgl+'</b><br><br>';
+ for(var i=0;i<parsed.length;i++){h+=parsed[i].nama+' - '+parsed[i].jam+'j - '+calc(parsed[i].jam)+' TUL<br>';}
+ h+='<br><button onclick=doSimpanWA() class=btn btn-black>Simpan '+parsed.length+' Data</button></div>';
+ pv.innerHTML=h;
+}
+function doSimpanWA(){
+ if(!parsed.length){alert('Preview kosong');return;}
+ var b=document.getElementById('bWA');if(b){b.innerHTML='Menyimpan...';b.disabled=true;}
+ var d=encodeURIComponent(JSON.stringify(parsed));
+ j(URL+'?action=addbulk&data='+d).then(function(r){
+  if(r&&r.ok){alert('Berhasil simpan '+r.added);parsed=[];var ta=document.getElementById('wa');if(ta) ta.value='';document.getElementById('pv').innerHTML='';load();}
+  else alert('Gagal '+JSON.stringify(r));
+  if(b){b.innerHTML='Simpan';b.disabled=false;}
+ }).catch(function(e){alert('Gagal '+e.message);if(b){b.innerHTML='Simpan';b.disabled=false;}});
+}
+function doSimpanM(){
+ var t=document.getElementById('tgl');if(!t||!t.value){alert('Pilih tanggal');return;}
+ var tgl=toDD(t.value);var its=[];
+ var sels=document.querySelectorAll('.js');
+ for(var i=0;i<sels.length;i++){var jam=Number(sels[i].value);var n=sels[i].getAttribute('data-nama');if(jam>0&&n) its.push({tanggal:tgl,nama:n,jam:jam});}
+ if(!its.length){alert('Pilih jam');return;}
+ var b=document.getElementById('bM');if(b){b.innerHTML='Menyimpan...';b.disabled=true;}
+ var d=encodeURIComponent(JSON.stringify(its));
+ j(URL+'?action=addbulk&data='+d).then(function(r){
+  if(r&&r.ok){alert('Berhasil '+r.added);for(var i=0;i<sels.length;i++) sels[i].value='0';load();}
+  else alert('Gagal');
+  if(b){b.innerHTML='Simpan Massal';b.disabled=false;}
+ }).catch(function(e){alert('Gagal '+e.message);if(b){b.innerHTML='Simpan Massal';b.disabled=false;}});
+}
+function doLogin(){var p=document.getElementById('p');if(!p) return;if(p.value=='admin123'){localStorage.setItem('admin_login','1');login=true;load();}else{var e=document.getElementById('e');if(e) e.innerHTML='Password salah';}}
+function doLogout(){localStorage.removeItem('admin_login');login=false;render();}
+function setFilter(v){filter=v;localStorage.setItem('fb',v);showN=6;load();}
+function doHapus(tgl){if(!confirm('Hapus '+fmt(tgl)+' ?')) return;j(URL+'?action=deletetanggal&tanggal='+encodeURIComponent(tgl)).then(function(r){if(r&&r.ok){alert('Terhapus '+r.deleted);load();}else alert('Gagal');}).catch(function(e){alert('Gagal '+e.message);});}
+function toggleWA(){showWA=!showWA;showM=false;render();}
+function toggleMassal(){showM=!showM;showWA=false;if(showM){loadMembers().then(function(){render();});}else{render();}}
+function render(){
+ var app=document.getElementById('app');
+ if(!login){
+  app.innerHTML='<div class=login><div class=box><div style=font-size:10px;letter-spacing:.3em;margin-bottom:20px>AREA EF - ADMIN</div><input id=p type=password placeholder=Password style=width:100%;height:42px;border:0;border-bottom:2px solid #111;outline:none><div id=e style=color:red;font-size:11px;margin-top:6px></div><button onclick=doLogin() style=width:100%;height:42px;background:#111;color:#fff;border-radius:22px;border:0;margin-top:12px;font-weight:700>Masuk</button></div></div>';
+  return;
+ }
+ var data=getFiltered();var gg=groupByDate(data);var rk=getRekap(data);
+ var h='<div class=h><b>AREA EF - ADMIN</b><button onclick=doLogout() class=btn>Keluar</button></div>';
+ h+='<div class=b><input type=date id=tgl class=inp><select onchange=setFilter(this.value) class=sel><option value=all '+(filter=='all'?'selected':'')+'>Semua</option><option value=1 '+(filter=='1'?'selected':'')+'>Jan</option><option value=2 '+(filter=='2'?'selected':'')+'>Feb</option><option value=3 '+(filter=='3'?'selected':'')+'>Mar</option><option value=4 '+(filter=='4'?'selected':'')+'>Apr</option><option value=5 '+(filter=='5'?'selected':'')+'>Mei</option><option value=6 '+(filter=='6'?'selected':'')+'>Jun</option><option value=7 '+(filter=='7'?'selected':'')+'>Jul</option><option value=8 '+(filter=='8'?'selected':'')+'>Agu</option><option value=9 '+(filter=='9'?'selected':'')+'>Sep</option><option value=10 '+(filter=='10'?'selected':'')+'>Okt</option><option value=11 '+(filter=='11'?'selected':'')+'>Nov</option><option value=12 '+(filter=='12'?'selected':'')+'>Des</option></select><button onclick=toggleWA() class=btn>'+(showWA?'Tutup':'Paste WA')+'</button><button onclick=toggleMassal() class=btn>'+(showM?'Tutup':'Massal')+'</button></div>';
+ if(showWA){
+  h+='<div class=card><div class=card-h><b>Paste WA</b><button onclick=toggleWA() class=btn>Tutup</button></div><div style=padding:10px><textarea id=wa class=ta placeholder="Selasa, 20 oktober 2026\nE10 1mp Arief\nF13 -1 Dozen\nE13 -1 Syarif"></textarea><div style=margin-top:6px><button onclick=doParseWA() class=btn btn-black>Cek Preview</button> <button id=bWA onclick=doSimpanWA() class=btn>Simpan</button></div><div id=pv style=margin-top:8px></div></div></div>';
+ }
+ if(showM){
+  h+='<div class=card><div class=card-h><b>Massal ('+members.length+')</b><div><button id=bM onclick=doSimpanM() class=btn btn-black>Simpan Massal</button> <button onclick=toggleMassal() class=btn>Tutup</button></div></div>';
+  if(!members.length) h+='<div class=empty>Memuat anggota... Klik lagi jika 0</div>';
+  else{for(var i=0;i<members.length;i++){var nm=members[i].nama||'';h+='<div class=row><span>'+nm+'</span><select class=sel js data-nama='+nm+'><option value=0>-</option><option value=1>1j</option><option value=2>2j</option><option value=3>3j</option><option value=4>4j</option><option value=6>6j</option><option value=7>7j</option><option value=8>8j</option></select></div>';}}
+  h+='</div>';
+ }
+ if(rk.length){h+='<div class=rekap><div style=font-size:10px;font-weight:700>REKAP '+data.length+' DATA - BLN '+filter+'</div>';for(var i=0;i<rk.length;i++){h+='<div class=row><span>'+rk[i].nama+' - '+rk[i].c+' hari</span><b>'+rk[i].tot+' TUL</b></div>';}h+='</div>';}
+ if(!gg.length) h+='<div class=empty>TIDAK ADA DATA BULAN '+filter+'</div>';
+ else{for(var i=0;i<Math.min(showN,gg.length);i++){var x=gg[i];var tot=0;for(var j=0;j<x.rows.length;j++) tot+=x.rows[j].tul;h+='<div class=card><div class=card-h><div><b>'+fmt(x.tanggal)+'</b><div style=font-size:11px;color:#888>'+x.rows.length+' orang - '+tot+' TUL</div></div><button onclick=doHapus(\''+x.tanggal+'\') class=btn>Hapus</button></div>';for(var j=0;j<x.rows.length;j++){h+='<div class=row><span>'+x.rows[j].nama+'</span><span>'+x.rows[j].jam+'j - '+x.rows[j].tul+'</span></div>';}h+='</div>';}if(showN<gg.length) h+='<div style=padding:10px><button onclick=showN+=8;render() class=btn btn-black style=width:100%>Load lagi '+(gg.length-showN)+'</button></div>';}
+ app.innerHTML=h;
+ var t=document.getElementById('tgl');if(t&&!t.value){t.value=new Date().toISOString().split('T')[0];}
+}
+load();
+</script>
+<script>(function(){var loc=location.href.replace(/#.*$/,"");var ATTR_NAMES=["data-product-id","data-productid","data-product_id","product-id","productid","product_id","data-source-entity-id","source-entity-id","source_entity_id","data-product","data-metadata","data-meta"];var DATASET_KEYS=["productId","productid","product_id","sourceEntityId","sourceentityid","source_entity_id","product","metadata","meta"];function readProductId(value){if(typeof value!=="string"||value.length===0)return null;if(/^[0-9]{6,}$/.test(value))return value;var match=value.match(/(?:product(?:_|-)?id|source(?:_|-)?entity(?:_|-)?id)["'=:\s]+([0-9]{6,})/i);return match?match[1]:null}function extractProductId(start){for(var node=start;node&&node!==document.body;node=node.parentElement){for(var i=0;i<ATTR_NAMES.length;i++){var attrValue=node.getAttribute&&node.getAttribute(ATTR_NAMES[i]);var attrProductId=readProductId(attrValue);if(attrProductId)return attrProductId}var dataset=node.dataset||null;if(dataset){for(var j=0;j<DATASET_KEYS.length;j++){var dataValue=dataset[DATASET_KEYS[j]];var dataProductId=readProductId(dataValue);if(dataProductId)return dataProductId}}}return null}function isInlineMediaSlotElement(node){return !!(node&&node.getAttribute&&node.getAttribute("data-clippy-inline-media-slot")!==null)}function findInlineMediaSlot(start){for(var node=start;node&&node!==document.body;node=node.parentElement){if(isInlineMediaSlotElement(node))return node}return null}function readInlineMediaUrl(node){if(!node)return null;return node.getAttribute&&((node.getAttribute("data-clippy-inline-media-url")||node.getAttribute("data-url")||node.getAttribute("data_url")))||node.href||null}function stripHash(url){return String(url).replace(/#.*$/,"")}function urlsMatch(a,b){if(!a||!b)return false;try{return stripHash(new URL(a,loc).href)===stripHash(new URL(b,loc).href)}catch(_){return stripHash(a)===stripHash(b)}}function isFirstPartyReelUrl(value){try{var url=new URL(value,loc);if(url.protocol!=="https:")return false;var host=url.hostname.toLowerCase();var supported=host==="instagram.com"||host.endsWith(".instagram.com")||host==="facebook.com"||host.endsWith(".facebook.com");return supported&&/\/reels?\//i.test(url.pathname)}catch(_){return false}}function isInlineMediaUrlClick(node,href){var slot=findInlineMediaSlot(node);if(!slot)return false;var slotUrl=readInlineMediaUrl(slot);if(slotUrl)return urlsMatch(href,slotUrl);return isFirstPartyReelUrl(href)}function findDataHref(start){for(var node=start;node&&node!==document.body;node=node.parentElement){if(node.getAttribute){var href=node.getAttribute("data-href")||node.getAttribute("data-url");if(href)return{href:href,node:node}}}return null}var nativeOpen=window.open;window.open=function(url){if(parent!==window&&typeof url==="string"&&/^https?:\/\//.test(url)){parent.postMessage({type:"ecto:usercontent-link-click",href:url},"*");return null}return nativeOpen?nativeOpen.apply(window,arguments):null};document.addEventListener("click",function(e){var target=e.target instanceof Element?e.target:null;if(!target)return;if(parent===window)return;var a=target.closest?target.closest("a[href]"):null;if(a&&a.href&&/^https?:\/\//.test(a.href)&&a.href.replace(/#.*$/,"")!==loc){if(isInlineMediaUrlClick(a,a.href))return;var productId=extractProductId(target)||extractProductId(a);if(productId){e.preventDefault();parent.postMessage({type:"ecto-artifact-link-click",productId:productId},"*");return}e.preventDefault();parent.postMessage({type:"ecto:usercontent-link-click",href:a.href},"*");return}var dataHref=findDataHref(target);if(dataHref&&/^https?:\/\//.test(dataHref.href)&&dataHref.href.replace(/#.*$/,"")!==loc){if(isInlineMediaUrlClick(dataHref.node,dataHref.href))return;e.preventDefault();parent.postMessage({type:"ecto:usercontent-link-click",href:dataHref.href},"*")}},true)})();</script><script>(function(){var FOCUS_TYPE="ecto:artifact-focus-request";var CLOSE_TYPE="ecto:artifact-close-request";function focusArtifactDocument(){var body=document.body;if(!body)return;try{window.focus();}catch(e){}if(!body.hasAttribute("tabindex"))body.setAttribute("tabindex","-1");try{body.focus({preventScroll:true});}catch(e){try{body.focus();}catch(e2){}}}window.addEventListener("message",function(event){if(event.source!==window.parent)return;var data=event.data;if(!data||typeof data!=="object"||data.type!==FOCUS_TYPE)return;if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",focusArtifactDocument,{once:true});return;}focusArtifactDocument();});window.addEventListener("keydown",function(event){if(event.key!=="Escape")return;window.setTimeout(function(){if(event.defaultPrevented)return;window.parent.postMessage({type:CLOSE_TYPE},"*");},0);});})();</script></body></html>
